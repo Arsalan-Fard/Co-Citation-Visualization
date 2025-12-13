@@ -528,6 +528,7 @@ class NetworkVisualizer {
         this.edgeThreshold = 0; // 0 to 100
         this.highlightRead = true; // Default matches HTML checked state
         this.highlightSurvey = false;
+        this.highlightCitation = false;
         
         this.setupSVG();
         this.setupResizeObserver();
@@ -541,6 +542,7 @@ class NetworkVisualizer {
     setFilter(type, value) {
         if (type === 'read') this.highlightRead = value;
         if (type === 'survey') this.highlightSurvey = value;
+        if (type === 'citation') this.highlightCitation = value;
         this.updateGraph();
     }
 
@@ -558,6 +560,73 @@ class NetworkVisualizer {
             }
         });
         this.resizeObserver.observe(this.panel);
+    }
+
+    updateGradients(nodes) {
+        const defs = this.svg.select("defs");
+        const nodesWithData = nodes.filter(d => d.citationDates && d.citationDates.length > 0);
+        
+        const showRead = this.highlightRead;
+        const showSurvey = this.highlightSurvey;
+        
+        // Define scales: 0 (White) -> 1 (Color)
+        const scaleBlue = d3.scaleLinear().domain([0, 1]).range(["#ffffff", "#3B82F6"]);
+        const scaleGreen = d3.scaleLinear().domain([0, 1]).range(["#ffffff", "#4ADE80"]);
+        const scalePurple = d3.scaleLinear().domain([0, 1]).range(["#ffffff", "#D946EF"]);
+
+        defs.selectAll(".burst-gradient")
+            .data(nodesWithData, d => d.id)
+            .join(
+                enter => enter.append("radialGradient")
+                    .attr("id", d => `grad-${d.id.replace(/[^a-zA-Z0-9]/g, '')}`)
+                    .attr("class", "burst-gradient")
+                    .attr("cx", "50%")
+                    .attr("cy", "50%")
+                    .attr("r", "50%"),
+                update => update,
+                exit => exit.remove()
+            )
+            .each(function(d) {
+                const sel = d3.select(this);
+                sel.selectAll("stop").remove();
+                
+                // Select Scale
+                let colorScale = scaleBlue;
+                if (showRead && d.isRead) colorScale = scaleGreen;
+                else if (showSurvey && d.isSurvey) colorScale = scalePurple;
+
+                const start = d.date ? d.date.getTime() : (d.citationDates[0].getTime());
+                const end = new Date().getTime();
+                const span = end - start;
+                
+                if (span <= 0) {
+                     sel.append("stop").attr("offset", "100%").attr("stop-color", "#ccc");
+                     return;
+                }
+                
+                const bins = 8;
+                const counts = new Array(bins).fill(0);
+                
+                d.citationDates.forEach(date => {
+                    const t = date.getTime();
+                    if (t < start) return;
+                    const pos = (t - start) / span;
+                    const idx = Math.min(bins - 1, Math.floor(pos * bins));
+                    counts[idx]++;
+                });
+                
+                const maxC = Math.max(...counts) || 1;
+                
+                for(let i=0; i<bins; i++) {
+                    const color = colorScale(counts[i] / maxC);
+                    sel.append("stop")
+                        .attr("offset", `${(i / bins) * 100}%`)
+                        .attr("stop-color", color);
+                    sel.append("stop")
+                        .attr("offset", `${((i+1) / bins) * 100}%`)
+                        .attr("stop-color", color);
+                }
+            });
     }
 
     updateSelection(selectedSet) {
@@ -726,7 +795,8 @@ class NetworkVisualizer {
                 venue: meta.venue,
                 primaryTopic: meta.primaryTopic,
                 isRead: meta.isRead,
-                isSurvey: meta.isSurvey
+                isSurvey: meta.isSurvey,
+                citationDates: meta.citationDates
             };
         }); // Removed filtering
 
@@ -763,6 +833,12 @@ class NetworkVisualizer {
         // Special case: if cutoff == maxS and we want to show the max edges, >= is fine.
         // If we want to hide ALL at 100 unless they equal max, that's also fine.
         const links = potentialLinks.filter(l => l.strength >= cutoff);
+
+        if (this.highlightCitation) {
+            this.updateGradients(nodes);
+        } else {
+            this.svg.select("defs").selectAll(".burst-gradient").remove();
+        }
 
         this.nodes = nodes;
         this.links = links;
@@ -863,6 +939,9 @@ class NetworkVisualizer {
         };
 
         const fillForNode = (node) => {
+            if (this.highlightCitation && node.citationDates && node.citationDates.length > 0) {
+                return `url(#grad-${node.id.replace(/[^a-zA-Z0-9]/g, '')})`;
+            }
             if (this.highlightRead && node.isRead) return READ_NODE_COLOR;
             if (this.highlightSurvey && node.isSurvey) return SURVEY_NODE_COLOR;
             if (!colorScale || nodeColorMetric === "none") return DEFAULT_NODE_COLOR;
@@ -1174,6 +1253,15 @@ function setupControls() {
             sankeyGraph.setFilter('survey', checked);
         });
     }
+
+    const filterCitation = document.getElementById('filter-citation');
+    if (filterCitation) {
+        filterCitation.addEventListener('change', (e) => {
+            const checked = e.target.checked;
+            cocitationGraph.setFilter('citation', checked);
+            bibliographicGraph.setFilter('citation', checked);
+        });
+    }
 }
 
 setupControls();
@@ -1392,6 +1480,19 @@ Promise.all([
     d3.csv("data/citation.csv")
 ]).then(([cocitationData, bibliographicData, metaData, refData, citData]) => {
 
+    const citationTimelines = new Map();
+    citData.forEach(row => {
+        const sourceId = row.source_paper_id ? row.source_paper_id.trim() : null;
+        if (!sourceId) return;
+        const dateStr = row.citing_paper_publication_date;
+        if (!dateStr) return;
+        const d = new Date(dateStr);
+        if (!isNaN(d)) {
+            if (!citationTimelines.has(sourceId)) citationTimelines.set(sourceId, []);
+            citationTimelines.get(sourceId).push(d);
+        }
+    });
+
     metaData.forEach(row => {
         const cited = row.cited_by_count ? +row.cited_by_count : undefined;
         const parsedDate = row.publication_date ? Date.parse(row.publication_date) : undefined;
@@ -1418,7 +1519,8 @@ Promise.all([
             primaryTopic,
             isRead,
             isSurvey,
-            title
+            title,
+            citationDates: citationTimelines.get(row.id) || []
         });
     });
 
