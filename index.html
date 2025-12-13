@@ -124,17 +124,13 @@
         </button>
 
         <div class="analytics-panel">
-            <div class="analytics-header">Network Analytics</div>
-            <div class="charts-grid">
-                <div class="chart-card">
-                    <div class="chart-title">Co-citation Distribution</div>
-                    <svg class="chart-container" id="chart1"></svg>
-                </div>
-                <div class="chart-card">
-                    <div class="chart-title">Citation Strength Trend</div>
-                    <svg class="chart-container" id="chart2"></svg>
-                </div>
+            <div class="analytics-header">Recommended Papers</div>
+            <div class="ranking-controls">
+                <button class="rank-btn" data-mode="coupling">Coupling</button>
+                <button class="rank-btn" data-mode="cocitation">Co-citation</button>
+                <button class="rank-btn active" data-mode="both">Both</button>
             </div>
+            <!-- Paper list will be injected here by graph.js -->
         </div>
     </div>
 

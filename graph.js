@@ -9,6 +9,10 @@ let nodeSizeMetric = "degree";
 let nodeColorMetric = "none";
 let positionStability = 1;
 
+// Global data storage
+let globalCocitationData = [];
+let globalBibliographicData = [];
+
 const horizontalPadding = 80;
 const axisNumberFormatter = d3.format(",");
 const axisDateFormatter = d3.timeFormat("%Y-%m-%d");
@@ -604,10 +608,32 @@ function handleGlobalNodeClick(event, d) {
     event.stopPropagation();
     const nodeId = d.id;
     graphs.forEach(g => g.highlightNode(nodeId));
+    highlightAnalytics(nodeId);
 }
 
 function handleGlobalClear() {
     graphs.forEach(g => g.clearHighlight());
+    clearAnalyticsHighlight();
+}
+
+function highlightAnalytics(nodeId) {
+    d3.selectAll(".paper-item").classed("selected", false);
+    d3.select(`.paper-item[data-id='${nodeId}']`).classed("selected", true);
+
+    const container = d3.select(".heatmap-container");
+    container.classed("has-selection", true);
+    
+    container.selectAll(".heatmap-cell").classed("highlighted", false);
+    container.selectAll(".heatmap-cell")
+        .filter(d => d.unreadId === nodeId)
+        .classed("highlighted", true);
+}
+
+function clearAnalyticsHighlight() {
+    d3.selectAll(".paper-item").classed("selected", false);
+    const container = d3.select(".heatmap-container");
+    container.classed("has-selection", false);
+    container.selectAll(".heatmap-cell").classed("highlighted", false);
 }
 
 const graphs = [cocitationGraph, bibliographicGraph];
@@ -753,6 +779,18 @@ function setupNetworkTypeToggle() {
 
 setupNetworkTypeToggle();
 
+function setupAnalyticsControls() {
+    const buttons = document.querySelectorAll('.rank-btn');
+    buttons.forEach(btn => {
+        btn.addEventListener('click', (e) => {
+            buttons.forEach(b => b.classList.remove('active'));
+            e.target.classList.add('active');
+            const mode = e.target.dataset.mode;
+            updateAnalytics(mode);
+        });
+    });
+}
+
 Promise.all([
     d3.csv("data/cocitation_network.csv"),
     d3.csv("data/bibliographic_coupling_network.csv"),
@@ -768,6 +806,7 @@ Promise.all([
         const venue = row.venue ? row.venue.trim() : undefined;
         const primaryTopic = row.primary_topic ? row.primary_topic.trim() : undefined;
         const isRead = row.read ? +row.read === 1 : false;
+        const title = row.title ? row.title.trim() : "Untitled";
         paperMeta.set(row.id, {
             year: yr,
             cited,
@@ -776,122 +815,244 @@ Promise.all([
             institution,
             venue,
             primaryTopic,
-            isRead
+            isRead,
+            title
         });
     });
+
+    globalCocitationData = cocitationData;
+    globalBibliographicData = bibliographicData;
 
     cocitationGraph.setData(cocitationData);
     bibliographicGraph.setData(bibliographicData);
     
-    // Initial dimension update
     updateAllGraphs();
+    setupAnalyticsControls();
+    updateAnalytics("both");
 
 }).catch(error => {
     console.error("Error loading CSVs:", error);
-    // Mock data handling if needed, or just log error
 });
 
-function createCharts() {
-    const chart1 = d3.select("#chart1");
-    // ... chart creation code remains same but ensure safe selection ...
-    if (chart1.empty()) return;
+function updateAnalytics(mode = "both") {
+    // 1. Build Adjacency Map for current mode
+    const adjacency = new Map();
+    const addEdge = (p1, p2, w) => {
+        if (isNaN(w)) return;
+        if (!adjacency.has(p1)) adjacency.set(p1, new Map());
+        if (!adjacency.has(p2)) adjacency.set(p2, new Map());
+        adjacency.get(p1).set(p2, (adjacency.get(p1).get(p2) || 0) + w);
+        adjacency.get(p2).set(p1, (adjacency.get(p2).get(p1) || 0) + w);
+    };
+
+    if (mode === "cocitation" || mode === "both") {
+        globalCocitationData.forEach(d => addEdge(d.paper1, d.paper2, +d.cocitation_strength));
+    }
+    if (mode === "coupling" || mode === "both") {
+        globalBibliographicData.forEach(d => addEdge(d.paper1, d.paper2, +d.coupling_strength));
+    }
+
+    // 2. Calculate scores for all unread papers
+    // Initialize with 0 for all known papers to ensure we cover disconnected ones if needed, 
+    // though here we care about ranking unread ones.
+    const unreadPapers = [];
+    const readPapers = [];
+
+    for (const [id, meta] of paperMeta.entries()) {
+        if (meta.isRead) {
+            readPapers.push({ id, title: meta.title });
+        } else {
+            // Calculate score based on sum of weights in current adjacency
+            // Note: degree in this context is usually sum of edge weights
+            let score = 0;
+            if (adjacency.has(id)) {
+                for (const w of adjacency.get(id).values()) {
+                    score += w;
+                }
+            }
+            unreadPapers.push({ id, title: meta.title, score });
+        }
+    }
+
+    unreadPapers.sort((a, b) => b.score - a.score);
+    const top10 = unreadPapers.slice(0, 10);
+
+    // 3. Prepare DOM
+    const panel = d3.select(".analytics-panel");
+    panel.selectAll(".paper-list").remove();
+    panel.selectAll(".heatmap-container").remove();
+    panel.selectAll(".charts-grid").remove(); // Legacy cleanup
+
+    // 4. Render Heatmap if we have read papers and results
+    if (readPapers.length > 0 && top10.length > 0) {
+        const heatmapContainer = panel.append("div").attr("class", "heatmap-container");
+        
+        // Calculate matrix: rows = read papers, cols = top 10 unread
+        const matrix = [];
+        let maxVal = 0;
+
+        readPapers.forEach(read => {
+            const row = { paper: read, values: [], totalStrength: 0 };
+            top10.forEach(unread => {
+                let w = 0;
+                if (adjacency.has(read.id) && adjacency.get(read.id).has(unread.id)) {
+                    w = adjacency.get(read.id).get(unread.id);
+                }
+                row.totalStrength += w;
+                row.values.push({
+                    readId: read.id,
+                    readTitle: read.title,
+                    unreadId: unread.id,
+                    unreadTitle: unread.title,
+                    value: w
+                });
+                if (w > maxVal) maxVal = w;
+            });
+            matrix.push(row);
+        });
+
+        // Sort rows by total strength descending
+        matrix.sort((a, b) => b.totalStrength - a.totalStrength);
+
+        // Dimensions
+        // We have 10 columns. Width depends on panel width.
+        // Let's assume a fixed aspect ratio or max width.
+        const containerNode = heatmapContainer.node();
+        // Use a default width if not mounted yet (though it should be)
+        const totalWidth = containerNode ? containerNode.getBoundingClientRect().width : 300;
+        const margin = { top: 20, right: 0, bottom: 0, left: 0 }; // Minimal margins
+        // Reserve some space for row labels? The prompt says "rows are read papers". 
+        // Showing text titles for rows might take too much space. 
+        // User didn't explicitly ask for text labels, just "rows are read papers".
+        // I will use tooltips for details and small rects.
+        
+        const cellSize = Math.floor((totalWidth - margin.left - margin.right) / 10);
+        const height = matrix.length * cellSize + margin.top + margin.bottom;
+
+        const svg = heatmapContainer.append("svg")
+            .attr("width", totalWidth)
+            .attr("height", height);
+
+        const g = svg.append("g")
+            .attr("transform", `translate(${margin.left},${margin.top})`);
+
+        // Column labels (1..10)
+        g.selectAll(".col-label")
+            .data(top10)
+            .join("text")
+            .attr("class", "heatmap-axis-label")
+            .attr("x", (d, i) => i * cellSize + cellSize / 2)
+            .attr("y", -5)
+            .style("text-anchor", "middle")
+            .text((d, i) => i + 1);
+
+        const colorScale = d3.scaleSequential(d3.interpolateViridis)
+            .domain([0, maxVal || 1]); // Use maxVal. If 0, avoid /0
+
+        // Create tooltip div if not exists
+        let tooltip = d3.select("body").select(".heatmap-tooltip");
+        if (tooltip.empty()) {
+            tooltip = d3.select("body").append("div")
+                .attr("class", "heatmap-tooltip")
+                .style("opacity", 0);
+        }
+
+        matrix.forEach((row, i) => {
+            g.selectAll(`.cell-row-${i}`)
+                .data(row.values)
+                .join("rect")
+                .attr("class", "heatmap-cell")
+                .attr("x", (d, j) => j * cellSize)
+                .attr("y", i * cellSize)
+                .attr("width", cellSize - 1)
+                .attr("height", cellSize - 1)
+                .attr("fill", d => d.value === 0 ? "#333" : colorScale(d.value))
+                .on("mouseover", (event, d) => {
+                    tooltip.transition().duration(200).style("opacity", 1);
+                    tooltip.html(`
+                        <div><b>Read:</b> ${d.readTitle}</div>
+                        <div><b>Rec:</b> ${d.unreadTitle}</div>
+                        <div><b>Strength:</b> ${d.value}</div>
+                    `)
+                    .style("left", (event.pageX + 10) + "px")
+                    .style("top", (event.pageY - 28) + "px");
+                })
+                .on("mouseout", () => {
+                    tooltip.transition().duration(500).style("opacity", 0);
+                })
+                .on("click", (event, d) => {
+                    // Highlight both nodes?
+                    handleGlobalNodeClick(event, {id: d.unreadId}); 
+                    // Optional: highlight read node too? The visualizer supports single highlighting mostly.
+                    // But our global handler effectively highlights one node.
+                });
+        });
+
+        // Legend
+        panel.selectAll(".heatmap-legend").remove();
+        const legendContainer = panel.append("div").attr("class", "heatmap-legend");
+        const legendWidth = totalWidth - margin.left - margin.right - 10;
+        const legendHeight = 10;
+        const legendSvg = legendContainer.append("svg")
+            .attr("width", totalWidth)
+            .attr("height", 30);
+        
+        const defs = legendSvg.append("defs");
+        const linearGradient = defs.append("linearGradient")
+            .attr("id", "linear-gradient");
+        
+        linearGradient
+            .attr("x1", "0%")
+            .attr("y1", "0%")
+            .attr("x2", "100%")
+            .attr("y2", "0%");
+        
+        for (let i = 0; i <= 10; i++) {
+            const offset = i / 10;
+            linearGradient.append("stop")
+                .attr("offset", (offset * 100) + "%")
+                .attr("stop-color", d3.interpolateViridis(offset));
+        }
+        
+        const legendG = legendSvg.append("g")
+            .attr("transform", `translate(${margin.left}, 0)`);
+
+        legendG.append("rect")
+            .attr("width", legendWidth)
+            .attr("height", legendHeight)
+            .style("fill", "url(#linear-gradient)");
+
+        legendG.append("text")
+            .attr("class", "heatmap-axis-label")
+            .attr("x", 0)
+            .attr("y", legendHeight + 12)
+            .style("text-anchor", "start")
+            .text("0");
+            
+        legendG.append("text")
+            .attr("class", "heatmap-axis-label")
+            .attr("x", legendWidth)
+            .attr("y", legendHeight + 12)
+            .style("text-anchor", "end")
+            .text(maxVal);
+    }
+
+    // 5. Render List
+    const list = panel.append("div").attr("class", "paper-list");
     
-    const c1Width = chart1.node().getBoundingClientRect().width;
-    const c1Height = 200;
-    const c1Margin = { top: 20, right: 20, bottom: 30, left: 40 };
-    const c1InnerWidth = c1Width - c1Margin.left - c1Margin.right;
-    const c1InnerHeight = c1Height - c1Margin.top - c1Margin.bottom;
-
-    const barData = Array.from({ length: 10 }, (_, i) => ({
-        category: `C${i + 1}`,
-        value: Math.floor(Math.random() * 100) + 20
-    }));
-
-    const c1g = chart1.append("g")
-        .attr("transform", `translate(${c1Margin.left},${c1Margin.top})`);
-
-    const xScale1 = d3.scaleBand()
-        .domain(barData.map(d => d.category))
-        .range([0, c1InnerWidth])
-        .padding(0.2);
-
-    const yScale1 = d3.scaleLinear()
-        .domain([0, d3.max(barData, d => d.value)])
-        .range([c1InnerHeight, 0]);
-
-    c1g.selectAll("rect")
-        .data(barData)
-        .join("rect")
-        .attr("x", d => xScale1(d.category))
-        .attr("y", d => yScale1(d.value))
-        .attr("width", xScale1.bandwidth())
-        .attr("height", d => c1InnerHeight - yScale1(d.value))
-        .attr("fill", "#667eea")
-        .attr("rx", 3);
-
-    c1g.append("g")
-        .attr("transform", `translate(0,${c1InnerHeight})`)
-        .call(d3.axisBottom(xScale1))
-        .style("font-size", "10px")
-        .style("color", "#666");
-
-    c1g.append("g")
-        .call(d3.axisLeft(yScale1).ticks(5))
-        .style("font-size", "10px")
-        .style("color", "#666");
-
-    const chart2 = d3.select("#chart2");
-    if (chart2.empty()) return;
-    
-    const c2Width = chart2.node().getBoundingClientRect().width;
-    const lineData = Array.from({ length: 20 }, (_, i) => ({
-        x: i,
-        y: 30 + Math.sin(i / 3) * 20 + Math.random() * 10
-    }));
-
-    const c2g = chart2.append("g")
-        .attr("transform", `translate(${c1Margin.left},${c1Margin.top})`);
-
-    const xScale2 = d3.scaleLinear()
-        .domain([0, 19])
-        .range([0, c2Width - c1Margin.left - c1Margin.right]);
-
-    const yScale2 = d3.scaleLinear()
-        .domain([0, d3.max(lineData, d => d.y)])
-        .range([c1InnerHeight, 0]);
-
-    const line = d3.line()
-        .x(d => xScale2(d.x))
-        .y(d => yScale2(d.y))
-        .curve(d3.curveMonotoneX);
-
-    c2g.append("path")
-        .datum(lineData)
-        .attr("fill", "none")
-        .attr("stroke", "#667eea")
-        .attr("stroke-width", 2)
-        .attr("d", line);
-
-    c2g.selectAll("circle")
-        .data(lineData)
-        .join("circle")
-        .attr("cx", d => xScale2(d.x))
-        .attr("cy", d => yScale2(d.y))
-        .attr("r", 3)
-        .attr("fill", "#764ba2")
-        .attr("stroke", "#1a1a1a")
-        .attr("stroke-width", 2);
-
-    c2g.append("g")
-        .attr("transform", `translate(0,${c1InnerHeight})`)
-        .call(d3.axisBottom(xScale2).ticks(10))
-        .style("font-size", "10px")
-        .style("color", "#666");
-
-    c2g.append("g")
-        .call(d3.axisLeft(yScale2).ticks(5))
-        .style("font-size", "10px")
-        .style("color", "#666");
+    top10.forEach((p, i) => {
+        const item = list.append("div")
+            .attr("class", "paper-item")
+            .attr("data-id", p.id)
+            .on("click", (event) => handleGlobalNodeClick(event, {id: p.id}));
+            
+        item.append("div")
+            .attr("class", "paper-title")
+            .attr("title", p.title)
+            .text(`${i + 1}. ${p.title}`);
+            
+        item.append("div")
+            .attr("class", "paper-metric")
+            .text(`Strength: ${p.score.toLocaleString()}`);
+    });
 }
-
-createCharts();
