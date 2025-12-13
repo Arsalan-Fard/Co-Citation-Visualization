@@ -6,8 +6,8 @@ import os
 
 # =================CONFIGURATION =================
 EMAIL = "arsalan.masoudifard@ip-paris.fr" 
-INPUT_FILE = "Phase1/main_papers.csv"
-OUTPUT_FILE = "Phase1/citation.csv"
+INPUT_FILE = "data/main_papers.csv"
+OUTPUT_FILE = "data/citation.csv"
 # ================================================
 
 def get_work_details(work_id):
@@ -161,6 +161,9 @@ def main():
             # Extract Cited By Count from the CITING paper
             cited_count = citation.get('cited_by_count', 0)
 
+            # Extract Publication Date from the CITING paper
+            publication_date = citation.get('publication_date', '')
+
             if not c_authorships:
                 # If no authors listed, add one row with empty author info
                 new_row = {
@@ -173,6 +176,7 @@ def main():
                     'paper_topic': c_topic_name,
                     'citing_paper_id': citing_id,
                     'citing_paper_name': citing_name,
+                    'citing_paper_publication_date': publication_date,
                     'cited_by_count': cited_count,
                     'relationship': 'incoming'
                 }
@@ -183,7 +187,7 @@ def main():
                 author = first_authorship.get('author', {})
                 institutions = first_authorship.get('institutions', [])
                 inst_names = "; ".join([inst.get('display_name', '') for inst in institutions])
-                
+
                 new_row = {
                     'source_paper_id': source_id_url,
                     'author_id': author.get('id'),
@@ -194,6 +198,7 @@ def main():
                     'paper_topic': c_topic_name,
                     'citing_paper_id': citing_id,
                     'citing_paper_name': citing_name,
+                    'citing_paper_publication_date': publication_date,
                     'cited_by_count': cited_count,
                     'relationship': 'incoming'
                 }
@@ -204,7 +209,7 @@ def main():
         out_df = pd.DataFrame(all_rows)
         # Ensure column order
         cols = ['source_paper_id','author_id','author_name','institutions','paper_subfield',
-                'paper_field','paper_topic','citing_paper_id','citing_paper_name','cited_by_count','relationship']
+                'paper_field','paper_topic','citing_paper_id','citing_paper_name','citing_paper_publication_date','cited_by_count','relationship']
         
         # Filter to only these columns
         out_df = out_df[cols]

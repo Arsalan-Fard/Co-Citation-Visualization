@@ -91,13 +91,13 @@ body {
 }
 
 .control-group {
-    margin-bottom: 30px;
+    margin-bottom: 20px;
 }
 
 .control-row {
     display: flex;
     gap: 15px;
-    margin-bottom: 30px;
+    margin-bottom: 20px;
 }
 
 .control-cell {
@@ -109,7 +109,7 @@ body {
     font-size: 12px;
     font-weight: 600;
     color: #888;
-    margin-bottom: 12px;
+    margin-bottom: 8px;
     display: block;
     text-transform: uppercase;
     letter-spacing: 1px;
@@ -117,12 +117,12 @@ body {
 
 .select {
     width: 100%;
-    padding: 10px 12px;
+    padding: 8px 10px;
     background: #1f1f1f;
     border: 1px solid #2a2a2a;
     border-radius: 6px;
     color: #e0e0e0;
-    font-size: 12px;
+    font-size: 11px;
     text-transform: uppercase;
     letter-spacing: 1px;
     cursor: pointer;
@@ -134,7 +134,7 @@ body {
     background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
     background-clip: text;
     -webkit-text-fill-color: transparent;
-    margin-bottom: 15px;
+    margin-bottom: 10px;
 }
 
 .slider {
@@ -167,9 +167,25 @@ body {
 .slider-labels {
     display: flex;
     justify-content: space-between;
-    margin-top: 8px;
+    margin-top: 6px;
     font-size: 11px;
     color: #666;
+}
+
+/* ... */
+
+.panel-separator {
+    border: 0;
+    border-top: 1px solid #2a2a2a;
+    margin: 15px 0;
+}
+
+.filters-row {
+    display: flex;
+    gap: 20px;
+    align-items: center;
+    justify-content: center;
+    margin-top: 15px;
 }
 
 .stats-card {
@@ -229,6 +245,15 @@ body {
     stroke: #667eea;
     stroke-width: 3px;
     filter: drop-shadow(0 0 8px rgba(102, 126, 234, 0.6));
+}
+
+.node.dimmed {
+    opacity: 0.1;
+    stroke-opacity: 0.1;
+}
+
+.link.dimmed {
+    stroke-opacity: 0.05;
 }
 
 .grid-layer .grid-line {
@@ -549,6 +574,7 @@ body {
     border-radius: 8px;
     border: 1px solid #2a2a2a;
     min-height: 40px;
+    justify-content: center; /* Center items */
 }
 
 .draggable-item {
@@ -618,4 +644,32 @@ body {
     box-sizing: border-box;
     z-index: 1; /* Above label */
     background: #333; /* Ensure background covers label */
+}
+
+/* --- Sankey Specific Styles --- */
+.sankey-link {
+  fill: none;
+  stroke-opacity: 0.22;
+  mix-blend-mode: screen;
+  transition: stroke-opacity 0.2s;
+}
+
+.sankey-node {
+  stroke: rgba(226, 232, 240, 0.25);
+  stroke-width: 1;
+  rx: 4;
+  transition: opacity 0.2s;
+}
+
+.dimmed {
+  opacity: 0.08 !important;
+}
+
+.sankey-link.dimmed {
+    stroke-opacity: 0.05 !important;
+}
+
+.highlighted {
+  opacity: 1 !important;
+  stroke-opacity: 0.75 !important;
 }

@@ -19,6 +19,7 @@ const axisNumberFormatter = d3.format(",");
 const axisDateFormatter = d3.timeFormat("%Y-%m-%d");
 const DEFAULT_NODE_COLOR = "#8EA2FF";
 const READ_NODE_COLOR = "#4ADE80";
+const SURVEY_NODE_COLOR = "#D946EF";
 const DEFAULT_NODE_RADIUS = 10;
 const COLOR_PALETTE = [
     "#6C8BFF", "#FF8A5B", "#4FD1C5", "#F97316", "#A855F7",
@@ -192,14 +193,14 @@ function sumByValues(map) {
 }
 
 function buildSankeyData({
-    readPaperIds,
+    activePaperIds, // changed from readPaperIds
     mainMeta,
     foundationsByPaper,
     audienceByPaper
 }) {
     // 1. Identify Top Categories (Field) for Foundations (Left) and Audience (Right)
-    const foundationTotals = aggregateCategoryTotals(foundationsByPaper, readPaperIds);
-    const audienceTotals = aggregateCategoryTotals(audienceByPaper, readPaperIds);
+    const foundationTotals = aggregateCategoryTotals(foundationsByPaper, activePaperIds);
+    const audienceTotals = aggregateCategoryTotals(audienceByPaper, activePaperIds);
 
     const maxCategories = 10;
     const topFoundationCats = topKeysByValue(foundationTotals, maxCategories, ["Unknown"]);
@@ -226,15 +227,17 @@ function buildSankeyData({
         });
     });
 
-    // Middle Nodes: Read Papers
-    readPaperIds.forEach(paperId => {
+    // Middle Nodes: Active Papers (Read + Selected)
+    activePaperIds.forEach(paperId => {
         const meta = mainMeta.get(paperId) || {};
         addNode({
             id: `P:${paperId}`,
             name: meta.title || paperId,
             type: "paper",
             paperId,
-            primaryTopic: meta.primaryTopic
+            primaryTopic: meta.primaryTopic,
+            isRead: meta.isRead,
+            isSurvey: meta.isSurvey // Add survey status
         });
     });
 
@@ -247,8 +250,8 @@ function buildSankeyData({
         });
     });
 
-    const paperFoundationTotals = totalsForPapers(foundationsByPaper, readPaperIds);
-    const paperAudienceTotals = totalsForPapers(audienceByPaper, readPaperIds);
+    const paperFoundationTotals = totalsForPapers(foundationsByPaper, activePaperIds);
+    const paperAudienceTotals = totalsForPapers(audienceByPaper, activePaperIds);
 
     const linksAgg = new Map();
     const addLink = (sourceId, targetId, paperId, value) => {
@@ -258,16 +261,13 @@ function buildSankeyData({
         else linksAgg.set(key, { source: sourceId, target: targetId, value, paperId });
     };
 
-    readPaperIds.forEach(paperId => {
+    activePaperIds.forEach(paperId => {
         const fCounts = foundationsByPaper.get(paperId) || new Map();
         const aCounts = audienceByPaper.get(paperId) || new Map();
-        const fTotal = paperFoundationTotals.get(paperId) || 0;
-        const aTotal = paperAudienceTotals.get(paperId) || 0;
-
+        
         // Foundation -> Paper
         fCounts.forEach((count, catRaw) => {
             const cat = topFoundationCats.has(catRaw) ? catRaw : "Other";
-            // Use count directly (volume)
             addLink(`F:${cat}`, `P:${paperId}`, paperId, count);
         });
 
@@ -293,8 +293,16 @@ class SankeyVisualizer {
         this.resizeTimeout = null;
         this.refData = [];
         this.citData = [];
+        this.highlightRead = true; // Default match UI
+        this.highlightSurvey = false;
         
         this.setupResizeObserver();
+    }
+    
+    setFilter(type, value) {
+        if (type === 'read') this.highlightRead = value;
+        if (type === 'survey') this.highlightSurvey = value;
+        this.updateGraph();
     }
 
     setupResizeObserver() {
@@ -317,7 +325,7 @@ class SankeyVisualizer {
         const rect = this.panel.getBoundingClientRect();
         // Account for header if any
         this.width = rect.width;
-        this.height = rect.height - 40; // Subtract header height approx
+        this.height = Math.max(0, rect.height - 40); // Subtract header height approx, ensure non-negative
         this.svg.attr("width", this.width).attr("height", this.height);
     }
 
@@ -331,31 +339,31 @@ class SankeyVisualizer {
         if (this.width < 50 || this.height < 50) return;
         this.svg.selectAll("*").remove();
 
-        // 1. Get Read Papers
-        const readPaperIds = new Set();
+        // 1. Get Active Papers (Read + Selected)
+        const activePaperIds = new Set();
         paperMeta.forEach((meta, id) => {
-            if (meta.isRead) readPaperIds.add(id);
+            if (meta.isRead) activePaperIds.add(id);
         });
+        // Add currently selected nodes
+        selectedNodeIds.forEach(id => activePaperIds.add(id));
 
-        if (readPaperIds.size === 0) {
+        if (activePaperIds.size === 0) {
             this.svg.append("text")
                 .attr("x", this.width/2)
                 .attr("y", this.height/2)
                 .attr("text-anchor", "middle")
                 .attr("fill", "#666")
-                .text("No read papers selected.");
+                .text("No read or selected papers.");
             return;
         }
 
         // 2. Build Category Counts (Field)
-        // references.csv: source_paper_id is Our Paper. paper_field is Foundation.
         const foundationsByPaper = buildPaperCategoryCounts(this.refData, "source_paper_id", "paper_field");
-        // citation.csv: source_paper_id is Our Paper. paper_field is Audience.
         const audienceByPaper = buildPaperCategoryCounts(this.citData, "source_paper_id", "paper_field");
 
         // 3. Build Sankey Data
         const graphData = buildSankeyData({
-            readPaperIds,
+            activePaperIds, // Pass the combined set
             mainMeta: paperMeta,
             foundationsByPaper,
             audienceByPaper
@@ -368,7 +376,7 @@ class SankeyVisualizer {
             .nodeId(d => d.id)
             .nodeWidth(14)
             .nodePadding(12)
-            .nodeAlign(d3.sankeyJustify)
+            .nodeAlign(d3.sankeyLeft) 
             .extent([[10, 20], [this.width - 10, this.height - 10]]);
 
         let graph = null;
@@ -385,8 +393,7 @@ class SankeyVisualizer {
         // 5. Render
         const COLORS = {
             foundation: "#94A3B8", // slate-400
-            audience: "#C4B5FD",   // violet-300
-            paper: "#4ADE80"       // green-400 (Read color)
+            audience: "#C4B5FD"    // violet-300
         };
 
         const g = this.svg.append("g");
@@ -401,7 +408,6 @@ class SankeyVisualizer {
             .attr("d", d3.sankeyLinkHorizontal())
             .attr("stroke-width", d => Math.max(1, d.width))
             .attr("stroke", d => {
-                 // Color by source node type usually, or static
                  return "#fff";
             })
             .style("mix-blend-mode", "screen");
@@ -421,9 +427,36 @@ class SankeyVisualizer {
             .attr("fill", d => {
                 if (d.type === "foundation") return COLORS.foundation;
                 if (d.type === "audience") return COLORS.audience;
-                return COLORS.paper;
+                // Paper coloring logic
+                if (this.highlightRead && d.isRead) return READ_NODE_COLOR;
+                if (this.highlightSurvey && d.isSurvey) return SURVEY_NODE_COLOR;
+                return DEFAULT_NODE_COLOR;
             })
-            .attr("opacity", 0.9);
+            .attr("opacity", 0.9)
+            .style("cursor", d => d.type === "paper" ? "pointer" : "default")
+            .on("click", (event, d) => {
+                if (d.type === "paper") {
+                    handleGlobalNodeClick(event, { id: d.paperId });
+                }
+            })
+            .on("mouseenter", (event, d) => {
+                if (d.type !== "paper" || selectedNodeIds.size > 0) return;
+                
+                // Highlight connected links
+                link.classed("highlighted", l => l.paperId === d.paperId);
+                // Highlight this node
+                node.classed("highlighted", n => n.type === "paper" && n.paperId === d.paperId);
+            })
+            .on("mouseleave", () => {
+                link.classed("highlighted", false);
+                node.classed("highlighted", false);
+                // We don't need to re-apply selection highlighting here because updateGraph rebuilds it, 
+                // but since this is mouseleave, we might want to just restore state.
+                // However, since we re-render on selection change, the 'dimmed' state is handled by updateGraph's logic?
+                // Wait, updateSelection is separate. 
+                // Let's call updateSelection to be safe if we are in a static state.
+                this.updateHighlights(selectedNodeIds);
+            });
 
         node.append("title")
             .text(d => `${d.name}\n${d.value}`);
@@ -434,18 +467,45 @@ class SankeyVisualizer {
             .attr("fill", "#ddd")
             .style("pointer-events", "none")
             .selectAll("text")
-            .data(graph.nodes)
+            .data(graph.nodes.filter(d => d.type !== "paper")) // Exclude paper labels
             .join("text")
             .attr("x", d => d.x0 < this.width / 2 ? d.x1 + 6 : d.x0 - 6)
             .attr("y", d => (d.y1 + d.y0) / 2)
             .attr("dy", "0.35em")
             .attr("text-anchor", d => d.x0 < this.width / 2 ? "start" : "end")
-            .text(d => d.type === "paper" ? (d.name.length > 25 ? d.name.slice(0,25)+"..." : d.name) : d.name);
+            .text(d => d.name);
+            
+        this.nodesSelection = node;
+        this.linksSelection = link;
+        
+        // Apply selection highlights
+        this.updateHighlights(selectedNodeIds);
     }
     
     updateSelection(selectedSet) {
-         // Optionally highlight papers in Sankey based on global selection
-         // For now, we just leave it as showing all Read papers
+         // Re-render the graph to include/exclude nodes based on selection
+         this.updateGraph();
+    }
+
+    updateHighlights(selectedSet) {
+         if (!this.nodesSelection || !this.linksSelection) return;
+         
+         if (selectedSet.size === 0) {
+             this.nodesSelection.classed("dimmed", false);
+             this.linksSelection.classed("dimmed", false);
+             return;
+         }
+         
+         this.nodesSelection.classed("dimmed", d => {
+             if (d.type === "paper") {
+                 return !selectedSet.has(d.paperId);
+             }
+             return false;
+         });
+         
+         this.linksSelection.classed("dimmed", d => {
+             return !selectedSet.has(d.paperId);
+         });
     }
 }
 
@@ -465,9 +525,23 @@ class NetworkVisualizer {
         this.height = 0;
         this.resizeObserver = null;
         this.resizeTimeout = null;
+        this.edgeThreshold = 0; // 0 to 100
+        this.highlightRead = true; // Default matches HTML checked state
+        this.highlightSurvey = false;
         
         this.setupSVG();
         this.setupResizeObserver();
+    }
+    
+    setEdgeThreshold(value) {
+        this.edgeThreshold = +value;
+        this.updateGraph();
+    }
+
+    setFilter(type, value) {
+        if (type === 'read') this.highlightRead = value;
+        if (type === 'survey') this.highlightSurvey = value;
+        this.updateGraph();
     }
 
     setupResizeObserver() {
@@ -487,19 +561,44 @@ class NetworkVisualizer {
     }
 
     updateSelection(selectedSet) {
-        this.graphGroup.selectAll(".link").classed("highlighted", false);
-        this.graphGroup.selectAll(".node").classed("selected", false);
+        const links = this.graphGroup.selectAll(".link");
+        const nodes = this.graphGroup.selectAll(".node");
 
-        if (selectedSet.size === 0) return;
+        links.classed("highlighted", false).classed("dimmed", false);
+        nodes.classed("selected", false).classed("dimmed", false);
 
-        this.graphGroup.selectAll(".link")
-            .filter(l => selectedSet.has(l.sourceId) || selectedSet.has(l.targetId))
-            .classed("highlighted", true);
+        if (selectedSet.size === 0) {
+            // Even without selection, dim orphans
+            nodes.classed("dimmed", d => d.degree === 0);
+            return;
+        }
 
-        this.graphGroup.selectAll(".node")
-            .filter(d => selectedSet.has(d.id))
-            .classed("selected", true)
-            .raise();
+        // Identify neighbors of selected nodes
+        const neighborSet = new Set();
+        if (this.links) {
+            this.links.forEach(l => {
+                if (selectedSet.has(l.sourceId)) neighborSet.add(l.targetId);
+                if (selectedSet.has(l.targetId)) neighborSet.add(l.sourceId);
+            });
+        }
+
+        // Highlight connected links, dim others
+        links.classed("highlighted", l => selectedSet.has(l.sourceId) || selectedSet.has(l.targetId))
+             .classed("dimmed", l => !selectedSet.has(l.sourceId) && !selectedSet.has(l.targetId));
+
+        // Select specific nodes, dim others (unless neighbor)
+        // Also dim orphans (degree 0) even if selected? No, if selected it should be visible.
+        // But an orphan can't have neighbors.
+        nodes.classed("selected", d => selectedSet.has(d.id))
+             .classed("dimmed", d => {
+                 if (selectedSet.has(d.id)) return false; // Selected is never dimmed
+                 if (neighborSet.has(d.id)) return false; // Neighbor is never dimmed
+                 // Otherwise dimmed (either disconnected from selection, OR orphan)
+                 return true; 
+             });
+             
+        // Bring selected to front
+        nodes.filter(d => selectedSet.has(d.id)).raise();
     }
 
     setupSVG() {
@@ -626,9 +725,10 @@ class NetworkVisualizer {
                 institution: meta.institution,
                 venue: meta.venue,
                 primaryTopic: meta.primaryTopic,
-                isRead: meta.isRead
+                isRead: meta.isRead,
+                isSurvey: meta.isSurvey
             };
-        });
+        }); // Removed filtering
 
         if (nodes.length === 0) {
             this.nodes = [];
@@ -641,13 +741,28 @@ class NetworkVisualizer {
         const filteredLinks = this.rawData.filter(d =>
             allNodeIds.has(d.paper1) && allNodeIds.has(d.paper2)
         );
-        const links = filteredLinks.map(d => ({
+        
+        let potentialLinks = filteredLinks.map(d => ({
             source: d.paper1,
             target: d.paper2,
             sourceId: d.paper1,
             targetId: d.paper2,
             strength: +d[this.strengthKey]
         })).filter(l => nodesById.has(l.sourceId) && nodesById.has(l.targetId));
+
+        // Threshold Logic
+        const fullStrengthExtent = potentialLinks.length ? d3.extent(potentialLinks, d => d.strength) : [0, 1];
+        const minS = fullStrengthExtent[0];
+        const maxS = fullStrengthExtent[1];
+        
+        // If slider is 100, we want only max strength (or empty if logic dictates >= max)
+        // If slider is 0, we want >= min (all)
+        const cutoff = minS + (this.edgeThreshold / 100) * (maxS - minS);
+        
+        // Keep links >= cutoff
+        // Special case: if cutoff == maxS and we want to show the max edges, >= is fine.
+        // If we want to hide ALL at 100 unless they equal max, that's also fine.
+        const links = potentialLinks.filter(l => l.strength >= cutoff);
 
         this.nodes = nodes;
         this.links = links;
@@ -671,9 +786,9 @@ class NetworkVisualizer {
             node.weightedDegree = metric.weightedDegree;
         });
 
-        const strengthExtent = links.length ? d3.extent(links, d => d.strength) : [0, 1];
+        // Use full extent for width scale stability
         const widthScale = d3.scaleLinear()
-            .domain(strengthExtent)
+            .domain(fullStrengthExtent)
             .range([0.1, 0.6]);
 
         const horizontalRange = [horizontalPadding, Math.max(horizontalPadding + 10, this.width - horizontalPadding)];
@@ -748,7 +863,8 @@ class NetworkVisualizer {
         };
 
         const fillForNode = (node) => {
-            if (node.isRead) return READ_NODE_COLOR;
+            if (this.highlightRead && node.isRead) return READ_NODE_COLOR;
+            if (this.highlightSurvey && node.isSurvey) return SURVEY_NODE_COLOR;
             if (!colorScale || nodeColorMetric === "none") return DEFAULT_NODE_COLOR;
             const value = getNodeColorValue(node, nodeColorMetric);
             if (!value) return DEFAULT_NODE_COLOR;
@@ -911,6 +1027,8 @@ class NetworkVisualizer {
         
         if (this.svg.attr("id") === "graph-svg") {
              document.getElementById('node-count').textContent = nodes.length.toLocaleString();
+             // Define strengthExtent alias for legacy code below if needed, or update usage
+             const strengthExtent = fullStrengthExtent;
              if (links.length > 0 && strengthExtent && strengthExtent[0] != null && strengthExtent[1] != null) {
                 document.getElementById('strength-range').textContent = `${strengthExtent[0]} - ${strengthExtent[1]}`;
             } else {
@@ -1001,16 +1119,28 @@ function setupControls() {
             updateAllGraphs();
         });
     }
-    const nodeColorSelect = document.getElementById('node-color-select');
-    if (nodeColorSelect) {
-        nodeColorSelect.value = nodeColorMetric;
-        nodeColorSelect.addEventListener('change', (event) => {
-            const value = event.target.value;
-            if (!NODE_COLOR_OPTIONS.has(value)) return;
-            nodeColorMetric = value;
-            updateAllGraphs();
+    
+    // Threshold Sliders
+    const cocitationSlider = document.getElementById('cocitation-strength-slider');
+    const cocitationValue = document.getElementById('cocitation-threshold-value');
+    if (cocitationSlider && cocitationValue) {
+        cocitationSlider.addEventListener('input', (e) => {
+            const val = +e.target.value;
+            cocitationValue.textContent = val + "%";
+            cocitationGraph.setEdgeThreshold(val);
         });
     }
+
+    const bibliographicSlider = document.getElementById('bibliographic-strength-slider');
+    const bibliographicValue = document.getElementById('bibliographic-threshold-value');
+    if (bibliographicSlider && bibliographicValue) {
+        bibliographicSlider.addEventListener('input', (e) => {
+            const val = +e.target.value;
+            bibliographicValue.textContent = val + "%";
+            bibliographicGraph.setEdgeThreshold(val);
+        });
+    }
+
     const stabilitySlider = document.getElementById('stability-slider');
     const stabilityValue = document.getElementById('stability-value');
     if (stabilitySlider && stabilityValue) {
@@ -1020,6 +1150,28 @@ function setupControls() {
             positionStability = parseFloat(event.target.value);
             stabilityValue.textContent = positionStability.toFixed(2);
             updateAllGraphs();
+        });
+    }
+
+    // Filter Checkboxes
+    const filterRead = document.getElementById('filter-read');
+    const filterSurvey = document.getElementById('filter-survey');
+
+    if (filterRead) {
+        filterRead.addEventListener('change', (e) => {
+            const checked = e.target.checked;
+            cocitationGraph.setFilter('read', checked);
+            bibliographicGraph.setFilter('read', checked);
+            sankeyGraph.setFilter('read', checked);
+        });
+    }
+
+    if (filterSurvey) {
+        filterSurvey.addEventListener('change', (e) => {
+            const checked = e.target.checked;
+            cocitationGraph.setFilter('survey', checked);
+            bibliographicGraph.setFilter('survey', checked);
+            sankeyGraph.setFilter('survey', checked);
         });
     }
 }
@@ -1250,6 +1402,12 @@ Promise.all([
         const primaryTopic = row.primary_topic ? row.primary_topic.trim() : undefined;
         const isRead = row.read ? +row.read === 1 : false;
         const title = row.title ? row.title.trim() : "Untitled";
+        
+        // Survey detection logic
+        const type = (row.type || "").toLowerCase();
+        const titleLower = title.toLowerCase();
+        const isSurvey = type.includes("review") || type.includes("survey") || titleLower.includes("survey") || titleLower.includes("review");
+
         paperMeta.set(row.id, {
             year: yr,
             cited,
@@ -1259,6 +1417,7 @@ Promise.all([
             venue,
             primaryTopic,
             isRead,
+            isSurvey,
             title
         });
     });

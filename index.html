@@ -29,7 +29,7 @@
         </div>
 
         <div class="side-panel">
-            <div class="control-group">
+            <div class="control-group" style="text-align: center;">
                 <label class="control-label">Layout Control</label>
                 <div class="layout-controls">
                     <div class="draggable-source">
@@ -47,6 +47,30 @@
                     </div>
                 </div>
             </div>
+
+            <hr class="panel-separator">
+
+            <div class="control-group">
+                <label class="control-label">Edge Strength Threshold</label>
+                
+                <div style="margin-bottom: 15px;">
+                    <div class="slider-labels" style="margin-bottom: 5px;">
+                        <span>Co-citation</span>
+                        <span id="cocitation-threshold-value">0%</span>
+                    </div>
+                    <input type="range" class="slider" id="cocitation-strength-slider" min="0" max="100" value="0">
+                </div>
+
+                <div>
+                    <div class="slider-labels" style="margin-bottom: 5px;">
+                        <span>Bibliographic</span>
+                        <span id="bibliographic-threshold-value">0%</span>
+                    </div>
+                    <input type="range" class="slider" id="bibliographic-strength-slider" min="0" max="100" value="0">
+                </div>
+            </div>
+
+            <hr class="panel-separator">
 
             <div class="stats-card" style="display: flex; justify-content: space-between; gap: 20px; display: none;">
                 <div style="flex: 1;">
@@ -73,6 +97,8 @@
                 </div>
             </div>
 
+            <hr class="panel-separator">
+
             <div class="control-row">
                 <div class="control-group control-cell">
                     <label class="control-label">X-Axis</label>
@@ -91,9 +117,7 @@
                         <option value="cocitation">Co-citation</option>
                     </select>
                 </div>
-            </div>
 
-            <div class="control-row">
                 <div class="control-group control-cell">
                     <label class="control-label">Node Size</label>
                     <select class="select" id="node-size-select">
@@ -103,15 +127,20 @@
                         <option value="citation">Citation</option>
                     </select>
                 </div>
+            </div>
 
-                <div class="control-group control-cell">
-                    <label class="control-label">Node Color</label>
-                    <select class="select" id="node-color-select">
-                        <option value="none" selected>None</option>
-                        <option value="venue">Venue</option>
-                        <option value="institution">Institution</option>
-                        <option value="topic">Topic</option>
-                    </select>
+            <hr class="panel-separator">
+
+            <div class="control-group">
+                <div class="filters-row">
+                    <label class="checkbox-label">
+                        <input type="checkbox" id="filter-read" class="checkbox" checked>
+                        <span>Read</span>
+                    </label>
+                    <label class="checkbox-label">
+                        <input type="checkbox" id="filter-survey" class="checkbox">
+                        <span>Survey</span>
+                    </label>
                 </div>
             </div>
 
