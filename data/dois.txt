@@ -1,0 +1,111 @@
+[1] Luis Alonso, Yan Ryan Zhang, Arnaud Grignard, Ariel Noyman, Yasushi Sakai,
+Markus ElKatsha, Ronan Doorley, and Kent Larson. 2018. CityScope: A Data-
+Driven Interactive Simulation Tool for Urban Design. Use Case Volpe. Springer
+International Publishing, 253–261. doi:10.1007/978-3-319-96661-8_27
+[2] Ishraq Awashra, Aaron W. Thompson, Kristin Floress, J.Gordon Arbuckle, Sarah P.
+Church, Ken Genskow, Linda S. Prokopy, Yichao Rui, and Omar Tesdell. 2025.
+Generative AI text-to-image for community participation in landscape planning.
+Landscape and Urban Planning 264 (2025), 105464. doi:10.1016/j.landurbplan.
+2025.105464
+[3] Greg Brown and Marketta Kyttä. 2014. Key issues and research priorities for
+public participation GIS (PPGIS): A synthesis based on empirical research. Applied
+Geography 46 (2014), 122–136. doi:10.1016/j.apgeog.2013.11.004
+[4] Silvia Cazacu, Stien Poncelet, Emma Feijtraij, and Andrew Vande Moere. 2025.
+The EnviroMapper Toolkit: An Input Physicalisation that Captures the Situated
+Experience of Environmental Comfort in Offices. In Proceedings of the Extended
+Abstracts of the CHI Conference on Human Factors in Computing Systems (CHI
+EA ’25). Association for Computing Machinery, New York, NY, USA, Article 518,
+14 pages. doi:10.1145/3706599.3720084
+[5] Sandy Claes and Andrew Vande Moere. 2015. The Role of Tangible Interaction
+in Exploring Information on Public Visualization Displays. In Proceedings of
+the 4th International Symposium on Pervasive Displays (Saarbruecken, Germany)
+(PerDis ’15). Association for Computing Machinery, New York, NY, USA, 201–207.
+doi:10.1145/2757710.2757733
+[6] Peter Dalsgaard and Kim Halskov. 2012. Tangible 3D tabletops: combining
+tangible tabletop interaction and 3D projection. In Proceedings of the 7th Nordic
+Conference on Human-Computer Interaction: Making Sense Through Design (Copen-
+hagen, Denmark) (NordiCHI ’12). Association for Computing Machinery, New
+York, NY, USA, 109–118. doi:10.1145/2399016.2399033
+[7] Timna Denwood, Jonathan J. Huck, and Sarah Lindley. 2022. Paper2GIS: improv-
+ing accessibility without limiting analytical potential in Participatory Mapping.
+Journal of Geographical Systems 25, 1 (July 2022), 37–57. doi:10.1007/s10109-022-
+00386-6
+[8] Kamyar Hasanzadeh. 2022. Use of participatory mapping approaches for activity
+space studies: a brief overview of pros and cons. GeoJournal 87, S4 (Oct. 2022),
+723–738. doi:10.1007/s10708-021-10489-0
+[9] Valérie Maquil, Ulrich Leopold, Luís Moreira De Sousa, Lou Schwartz, and Eric
+Tobias. 2018. Towards a framework for geospatial tangible user interfaces in
+collaborative urban planning. Journal of Geographical Systems 20, 2 (March 2018),
+185–206. doi:10.1007/s10109-018-0265-6
+[10] Rashid Mushkani, Hugo Berard, and Shin Koseki. 2025. WeDesign: Generative
+AI-Facilitated Community Consultations for Urban Public Space Design. arXiv
+preprint arXiv:2508.19256 (2025).
+[11] Ariel Noyman and Kent Larson. 2020. A deep image of the city: generative urban-
+design visualization. In Proceedings of the 11th Annual Symposium on Simulation
+for Architecture and Urban Design (Virtual Event, Austria) (SimAUD ’20). Society
+for Computer Simulation International, San Diego, CA, USA, Article 23, 8 pages.
+[12] Georgia Panagiotidou, Sinem Görücü, Eslam Nofal, Müge Akkar Ercan, and
+Andrew Vande Moere. 2022. Co-gnito: a Participatory Physicalization Game for
+Urban Mental Mapping. In Proceedings of the 14th Conference on Creativity and
+Cognition (Venice, Italy) (C&C ’22). Association for Computing Machinery, New
+York, NY, USA, 284–297. doi:10.1145/3527927.3532803
+[13] Sebastian Prost, Vasilis Ntouros, Gavin Wood, Henry Collingham, Nick Taylor,
+Clara Crivellaro, Jon Rogers, and John Vines. 2023. Walking and Talking: Place-
+based Data Collection and Mapping for Participatory Design with Communities.
+In Proceedings of the 2023 ACM Designing Interactive Systems Conference (Pitts-
+burgh, PA, USA) (DIS ’23). Association for Computing Machinery, New York, NY,
+USA, 2437–2452. doi:10.1145/3563657.3596054
+[14] Martin Tomitsch, Joel Fredericks, Marius Hoggenmüller, Alexandra Crosby,
+Adrian Wong, Xinyan Yu, and Weidong Huang. 2025. AI-Supported Partici-
+patory Workshops: Middle-Out Engagement for Crisis Events. Urban Planning
+10 (Jan. 2025). doi:10.17645/up.9165
+doi:10.1016/j.ecoser.2014.10.007
+doi:10.31219/osf.io/3wx5a
+doi:10.1016/j.landurbplan.2014.08.009
+doi:10.1007/s10707-018-00339-6
+doi:10.3390/ijgi6030085
+doi:10.1016/j.apgeog.2014.12.011
+doi:10.1016/j.landurbplan.2019.02.019
+doi:10.1080/02697459.2015.1104203
+doi:10.1016/j.landurbplan.2020.103845
+doi:10.5751/es-08999-220107
+doi:10.1016/j.apgeog.2020.102156
+doi:10.1016/j.apgeog.2018.04.002
+doi:10.1016/j.ufug.2018.06.016
+doi:10.1177/0265813515600121
+doi:10.1111/tgis.12207
+doi:10.1061/(asce)is.1943-555x.0000549
+doi:10.1016/j.ecoser.2014.11.006
+doi:10.1016/j.landurbplan.2016.12.012
+doi:10.1016/j.ecoser.2014.12.009
+doi:10.17645/up.v1i2.609
+doi:10.1016/j.scs.2017.10.026
+doi:10.4018/ijepr.2018070105
+doi:10.1016/j.jenvman.2018.11.124
+doi:10.1080/13658816.2020.1869747
+doi:10.1016/j.apgeog.2016.12.009
+doi:10.1016/j.ufug.2021.127257
+doi:10.1017/9781316106891
+doi:10.1016/j.ecoser.2016.06.010
+doi:10.1080/14733285.2018.1453923
+doi:10.1016/j.jum.2022.08.001
+doi:10.1016/j.landurbplan.2016.05.005
+doi:10.1016/j.apgeog.2016.12.015
+doi:10.1080/13658816.2020.1730848
+doi:10.3390/ijerph17051541
+doi:10.1177/0309132520961468
+doi:10.1016/j.ocecoaman.2017.03.019
+doi:10.1111/tgis.12191
+doi:10.1016/j.oneear.2020.01.003
+doi:10.1016/j.landurbplan.2018.04.011
+doi:10.1109/tvcg.2021.3114835
+doi:10.1177/0265813516657341
+doi:10.1016/j.landurbplan.2018.05.018
+doi:10.1145/2556288.2557342
+doi:10.1080/09640568.2022.2029736
+doi:10.1016/j.ecolecon.2016.09.029
+doi:10.3390/su12052136
+doi:10.1080/00087041.2016.1227552
+doi:10.1002/pan3.10137
+doi:10.1016/j.apgeog.2014.06.006
+doi:10.1016/j.landusepol.2014.11.014

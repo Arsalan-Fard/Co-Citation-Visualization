@@ -1,0 +1,134 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Network Visualization</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/d3/7.8.5/d3.min.js"></script>
+    <script src="graph.js" defer></script>
+    <link rel="stylesheet" href="styles.css">
+</head>
+
+<body>
+    <div id="app-container">
+        <div class="main-panel">
+            <svg id="graph-svg" class="graph-container"></svg>
+        </div>
+
+        <div class="side-panel">
+            <div class="control-group">
+                
+                <div style="display: flex; justify-content: center;">
+                    
+                    <label class="control-label">Top Papers Per Year:</label>
+                    <div class="control-label" id="row-count" style="margin-left: 5px;">50</div>
+                </div>
+
+                <input type="range" class="slider" id="row-slider" min="5" max="200" step="5" value="50">
+                <div class="slider-labels">
+                    <span>5</span>
+                    <span>200</span>
+                </div>
+            </div>
+
+            <div class="stats-card" style="display: flex; justify-content: space-between; gap: 20px; display: none;">
+                <div style="flex: 1;">
+                    <div class="stat-label">Papers</div>
+                    <div class="stat-value" id="node-count">0</div>
+                </div>
+
+                <div style="flex: 2;">
+                    <div class="stat-label">Strength Range</div>
+                    <div class="stat-value" style="font-size: 18px;" id="strength-range">-</div>
+                </div>
+            </div>
+
+            <div class="control-group">
+                <div style="display: flex; justify-content: center;">
+                    <label class="control-label">Stability</label>
+                    <div class="control-label" id="stability-value" style="margin-left: 5px;">1.00</div>
+                </div>
+
+                <input type="range" class="slider" id="stability-slider" min="0" max="1" step="0.05" value="1">
+                <div class="slider-labels">
+                    <span>Force only</span>
+                    <span>Axes only</span>
+                </div>
+            </div>
+
+            <div class="control-row">
+                <div class="control-group control-cell">
+                    <label class="control-label">X-Axis</label>
+                    <select class="select" id="x-axis-select">
+                        <option value="date" selected>Date</option>
+                        <option value="citation">Citation</option>
+                        <option value="cocitation">Co-citation</option>
+                    </select>
+                </div>
+
+                <div class="control-group control-cell">
+                    <label class="control-label">Y-Axis</label>
+                    <select class="select" id="y-axis-select">
+                        <option value="citation" selected>Citation</option>
+                        <option value="date">Date</option>
+                        <option value="cocitation">Co-citation</option>
+                    </select>
+                </div>
+            </div>
+
+            <div class="control-row">
+                <div class="control-group control-cell">
+                    <label class="control-label">Node Size</label>
+                    <select class="select" id="node-size-select">
+                        <option value="none">None</option>
+                        <option value="degree" selected>Degree</option>
+                        <option value="weightedDegree">Weighted Degree</option>
+                        <option value="citation">Citation</option>
+                    </select>
+                </div>
+
+                <div class="control-group control-cell">
+                    <label class="control-label">Node Color</label>
+                    <select class="select" id="node-color-select">
+                        <option value="none" selected>None</option>
+                        <option value="venue">Venue</option>
+                        <option value="institution">Institution</option>
+                        <option value="topic">Topic</option>
+                    </select>
+                </div>
+            </div>
+
+
+
+            <!-- <div class="legend">
+                <div class="legend-title">Edge Weight</div>
+                <div class="legend-item">
+                    <div class="legend-line"></div>
+                    <span>Weak citation</span>
+                </div>
+                <div class="legend-item">
+                    <div class="legend-line strong"></div>
+                    <span>Strong citation</span>
+                </div>
+            </div> -->
+        </div>
+
+        <div class="analytics-panel">
+            <div class="analytics-header">Network Analytics</div>
+            <div class="charts-grid">
+                <div class="chart-card">
+                    <div class="chart-title">Co-citation Distribution</div>
+                    <svg class="chart-container" id="chart1"></svg>
+                </div>
+                <div class="chart-card">
+                    <div class="chart-title">Citation Strength Trend</div>
+                    <svg class="chart-container" id="chart2"></svg>
+                </div>
+            </div>
+        </div>
+    </div>
+
+</body>
+
+</html>
