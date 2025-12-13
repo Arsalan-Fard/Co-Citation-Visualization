@@ -131,6 +131,327 @@ function getMetricValue(node, metricKey) {
     return raw;
 }
 
+// --- Sankey Helpers (ported from river.js) ---
+function normKey(value) {
+    const str = (value ?? "").toString().trim();
+    return str.length ? str : "Unknown";
+}
+
+function addToNestedCount(target, outerKey, innerKey, amount) {
+    if (!target.has(outerKey)) target.set(outerKey, new Map());
+    const inner = target.get(outerKey);
+    inner.set(innerKey, (inner.get(innerKey) || 0) + amount);
+}
+
+function buildPaperCategoryCounts(rows, paperIdKey, categoryKey) {
+    const out = new Map();
+    rows.forEach(row => {
+        const paperId = normKey(row[paperIdKey]);
+        // Extract category (simple lookup for now, assumed flat CSV structure)
+        const cat = normKey(row[categoryKey]);
+        addToNestedCount(out, paperId, cat, 1);
+    });
+    return out;
+}
+
+function aggregateCategoryTotals(paperCounts, paperIds) {
+    const totals = new Map();
+    paperIds.forEach(id => {
+        const counts = paperCounts.get(id);
+        if (!counts) return;
+        counts.forEach((value, cat) => {
+            totals.set(cat, (totals.get(cat) || 0) + value);
+        });
+    });
+    return totals;
+}
+
+function topKeysByValue(map, limit, alwaysInclude = []) {
+    const entries = Array.from(map.entries())
+        .sort((a, b) => b[1] - a[1])
+        .slice(0, limit)
+        .map(([k]) => k);
+    const set = new Set(entries);
+    alwaysInclude.forEach(k => set.add(k));
+    return set;
+}
+
+function totalsForPapers(paperCounts, paperIds) {
+    const totals = new Map();
+    paperIds.forEach(id => {
+        const m = paperCounts.get(id);
+        totals.set(id, m ? sumByValues(m) : 0);
+    });
+    return totals;
+}
+
+function sumByValues(map) {
+    let sum = 0;
+    map.forEach(v => sum += v);
+    return sum;
+}
+
+function buildSankeyData({
+    readPaperIds,
+    mainMeta,
+    foundationsByPaper,
+    audienceByPaper
+}) {
+    // 1. Identify Top Categories (Field) for Foundations (Left) and Audience (Right)
+    const foundationTotals = aggregateCategoryTotals(foundationsByPaper, readPaperIds);
+    const audienceTotals = aggregateCategoryTotals(audienceByPaper, readPaperIds);
+
+    const maxCategories = 10;
+    const topFoundationCats = topKeysByValue(foundationTotals, maxCategories, ["Unknown"]);
+    const topAudienceCats = topKeysByValue(audienceTotals, maxCategories, ["Unknown"]);
+    
+    // Add "Other" if needed
+    topFoundationCats.add("Other");
+    topAudienceCats.add("Other");
+
+    const nodes = [];
+    const nodeIndex = new Map();
+    const addNode = (node) => {
+        if (nodeIndex.has(node.id)) return;
+        nodeIndex.set(node.id, nodes.length);
+        nodes.push(node);
+    };
+
+    // Left Nodes: Foundations
+    Array.from(topFoundationCats).forEach(cat => {
+        addNode({
+            id: `F:${cat}`,
+            name: cat,
+            type: "foundation"
+        });
+    });
+
+    // Middle Nodes: Read Papers
+    readPaperIds.forEach(paperId => {
+        const meta = mainMeta.get(paperId) || {};
+        addNode({
+            id: `P:${paperId}`,
+            name: meta.title || paperId,
+            type: "paper",
+            paperId,
+            primaryTopic: meta.primaryTopic
+        });
+    });
+
+    // Right Nodes: Audience
+    Array.from(topAudienceCats).forEach(cat => {
+        addNode({
+            id: `A:${cat}`,
+            name: cat,
+            type: "audience"
+        });
+    });
+
+    const paperFoundationTotals = totalsForPapers(foundationsByPaper, readPaperIds);
+    const paperAudienceTotals = totalsForPapers(audienceByPaper, readPaperIds);
+
+    const linksAgg = new Map();
+    const addLink = (sourceId, targetId, paperId, value) => {
+        const key = `${sourceId}→${targetId}`;
+        const prev = linksAgg.get(key);
+        if (prev) prev.value += value;
+        else linksAgg.set(key, { source: sourceId, target: targetId, value, paperId });
+    };
+
+    readPaperIds.forEach(paperId => {
+        const fCounts = foundationsByPaper.get(paperId) || new Map();
+        const aCounts = audienceByPaper.get(paperId) || new Map();
+        const fTotal = paperFoundationTotals.get(paperId) || 0;
+        const aTotal = paperAudienceTotals.get(paperId) || 0;
+
+        // Foundation -> Paper
+        fCounts.forEach((count, catRaw) => {
+            const cat = topFoundationCats.has(catRaw) ? catRaw : "Other";
+            // Use count directly (volume)
+            addLink(`F:${cat}`, `P:${paperId}`, paperId, count);
+        });
+
+        // Paper -> Audience
+        aCounts.forEach((count, catRaw) => {
+            const cat = topAudienceCats.has(catRaw) ? catRaw : "Other";
+            addLink(`P:${paperId}`, `A:${cat}`, paperId, count);
+        });
+    });
+
+    const links = Array.from(linksAgg.values()).filter(l => nodeIndex.has(l.source) && nodeIndex.has(l.target));
+
+    return { nodes, links };
+}
+
+class SankeyVisualizer {
+    constructor(svgSelector, panelElement) {
+        this.svg = d3.select(svgSelector);
+        this.panel = panelElement;
+        this.width = 0;
+        this.height = 0;
+        this.resizeObserver = null;
+        this.resizeTimeout = null;
+        this.refData = [];
+        this.citData = [];
+        
+        this.setupResizeObserver();
+    }
+
+    setupResizeObserver() {
+        this.resizeObserver = new ResizeObserver(entries => {
+            for (let entry of entries) {
+                if (entry.target === this.panel) {
+                    if (this.resizeTimeout) cancelAnimationFrame(this.resizeTimeout);
+                    this.resizeTimeout = requestAnimationFrame(() => {
+                        this.updateDimensions();
+                        this.updateGraph();
+                        this.resizeTimeout = null;
+                    });
+                }
+            }
+        });
+        this.resizeObserver.observe(this.panel);
+    }
+
+    updateDimensions() {
+        const rect = this.panel.getBoundingClientRect();
+        // Account for header if any
+        this.width = rect.width;
+        this.height = rect.height - 40; // Subtract header height approx
+        this.svg.attr("width", this.width).attr("height", this.height);
+    }
+
+    setData(refData, citData) {
+        this.refData = refData;
+        this.citData = citData;
+        this.updateGraph();
+    }
+
+    updateGraph() {
+        if (this.width < 50 || this.height < 50) return;
+        this.svg.selectAll("*").remove();
+
+        // 1. Get Read Papers
+        const readPaperIds = new Set();
+        paperMeta.forEach((meta, id) => {
+            if (meta.isRead) readPaperIds.add(id);
+        });
+
+        if (readPaperIds.size === 0) {
+            this.svg.append("text")
+                .attr("x", this.width/2)
+                .attr("y", this.height/2)
+                .attr("text-anchor", "middle")
+                .attr("fill", "#666")
+                .text("No read papers selected.");
+            return;
+        }
+
+        // 2. Build Category Counts (Field)
+        // references.csv: source_paper_id is Our Paper. paper_field is Foundation.
+        const foundationsByPaper = buildPaperCategoryCounts(this.refData, "source_paper_id", "paper_field");
+        // citation.csv: source_paper_id is Our Paper. paper_field is Audience.
+        const audienceByPaper = buildPaperCategoryCounts(this.citData, "source_paper_id", "paper_field");
+
+        // 3. Build Sankey Data
+        const graphData = buildSankeyData({
+            readPaperIds,
+            mainMeta: paperMeta,
+            foundationsByPaper,
+            audienceByPaper
+        });
+
+        if (!graphData.nodes.length) return;
+
+        // 4. Layout
+        const sankey = d3.sankey()
+            .nodeId(d => d.id)
+            .nodeWidth(14)
+            .nodePadding(12)
+            .nodeAlign(d3.sankeyJustify)
+            .extent([[10, 20], [this.width - 10, this.height - 10]]);
+
+        let graph = null;
+        try {
+            graph = sankey({
+                nodes: graphData.nodes.map(d => ({ ...d })),
+                links: graphData.links.map(d => ({ ...d }))
+            });
+        } catch (e) {
+            console.error("Sankey layout error:", e);
+            return;
+        }
+
+        // 5. Render
+        const COLORS = {
+            foundation: "#94A3B8", // slate-400
+            audience: "#C4B5FD",   // violet-300
+            paper: "#4ADE80"       // green-400 (Read color)
+        };
+
+        const g = this.svg.append("g");
+
+        // Links
+        const link = g.append("g")
+            .attr("fill", "none")
+            .attr("stroke-opacity", 0.15)
+            .selectAll("path")
+            .data(graph.links)
+            .join("path")
+            .attr("d", d3.sankeyLinkHorizontal())
+            .attr("stroke-width", d => Math.max(1, d.width))
+            .attr("stroke", d => {
+                 // Color by source node type usually, or static
+                 return "#fff";
+            })
+            .style("mix-blend-mode", "screen");
+
+        link.append("title")
+            .text(d => `${d.source.name} → ${d.target.name}\n${d.value} connections`);
+
+        // Nodes
+        const node = g.append("g")
+            .selectAll("rect")
+            .data(graph.nodes)
+            .join("rect")
+            .attr("x", d => d.x0)
+            .attr("y", d => d.y0)
+            .attr("height", d => Math.max(1, d.y1 - d.y0))
+            .attr("width", d => d.x1 - d.x0)
+            .attr("fill", d => {
+                if (d.type === "foundation") return COLORS.foundation;
+                if (d.type === "audience") return COLORS.audience;
+                return COLORS.paper;
+            })
+            .attr("opacity", 0.9);
+
+        node.append("title")
+            .text(d => `${d.name}\n${d.value}`);
+
+        // Labels
+        g.append("g")
+            .attr("font-size", "10px")
+            .attr("fill", "#ddd")
+            .style("pointer-events", "none")
+            .selectAll("text")
+            .data(graph.nodes)
+            .join("text")
+            .attr("x", d => d.x0 < this.width / 2 ? d.x1 + 6 : d.x0 - 6)
+            .attr("y", d => (d.y1 + d.y0) / 2)
+            .attr("dy", "0.35em")
+            .attr("text-anchor", d => d.x0 < this.width / 2 ? "start" : "end")
+            .text(d => d.type === "paper" ? (d.name.length > 25 ? d.name.slice(0,25)+"..." : d.name) : d.name);
+    }
+    
+    updateSelection(selectedSet) {
+         // Optionally highlight papers in Sankey based on global selection
+         // For now, we just leave it as showing all Read papers
+    }
+}
+
+const sankeyPanel = document.getElementById('sankey-panel');
+const sankeyGraph = new SankeyVisualizer("#sankey-svg", sankeyPanel);
+
 class NetworkVisualizer {
     constructor(svgSelector, panelElement, strengthKey) {
         this.svg = d3.select(svgSelector);
@@ -635,7 +956,7 @@ function updateAnalyticsSelection() {
         .classed("highlighted", d => selectedNodeIds.has(d.unreadId));
 }
 
-const graphs = [cocitationGraph, bibliographicGraph];
+const graphs = [cocitationGraph, bibliographicGraph, sankeyGraph];
 
 function updateAllGraphs() {
     graphs.forEach(g => {
@@ -835,18 +1156,7 @@ function setupDragAndDrop() {
         if (panel1Id) {
             const p1 = document.getElementById(panel1Id);
             p1.classList.remove('hidden');
-            // It will naturally flow into the first available grid track after side-panel
-            // We need to ensure it's in the DOM in the right order or assign specific tracks?
-            // Easier to just toggle visibility and let CSS Grid auto-placement work if we constrain columns.
-            // But we need to support "Panel 1 is left, Panel 2 is right".
-            
-            // Explicitly set order in CSS Grid via style if simpler, or just rely on DOM order?
-            // Since panels are siblings, let's just use explicit columns if possible or rely on "hidden" removing them from flow?
-            // "hidden" class uses display:none, so they are removed from grid flow.
-            
-            // If only Zone 1 is active: 320px 1fr 0fr 360px (or similar)
-            // If only Zone 2 is active: 320px 0fr 1fr 360px ? No, just one main area.
-            
+            p1.style.gridColumn = "2"; // Explicitly place in View 1 column
             gridTemplate += "1fr ";
         } else {
              gridTemplate += "0fr "; // Collapse
@@ -856,6 +1166,7 @@ function setupDragAndDrop() {
         if (panel2Id) {
              const p2 = document.getElementById(panel2Id);
              p2.classList.remove('hidden');
+             p2.style.gridColumn = "3"; // Explicitly place in View 2 column
              gridTemplate += "1fr ";
         } else {
              gridTemplate += "0fr ";
@@ -863,19 +1174,9 @@ function setupDragAndDrop() {
 
         gridTemplate += "360px";
 
-        // Handle the case where both are active, we need to ensure they appear in the right visual order (Left vs Right)
-        // Since the DOM order is fixed (Cocitation, Bibliographic, Sankey), we might need `order` property
-        // or explicit grid-column assignment.
-        
-        // Let's use `order` style
-        // Side Panel is order 0 (default) or explicit grid-column 1.
-        
-        if (panel1Id) {
-            document.getElementById(panel1Id).style.order = "1";
-        }
-        if (panel2Id) {
-            document.getElementById(panel2Id).style.order = "2";
-        }
+        // Remove order properties as we are using explicit grid columns now
+        if (panel1Id) document.getElementById(panel1Id).style.order = "";
+        if (panel2Id) document.getElementById(panel2Id).style.order = "";
         
         // Analytics panel is forced to order 999 in CSS.
         
@@ -934,8 +1235,10 @@ function setupAnalyticsControls() {
 Promise.all([
     d3.csv("data/cocitation_network.csv"),
     d3.csv("data/bibliographic_coupling_network.csv"),
-    d3.csv("data/main_papers.csv")
-]).then(([cocitationData, bibliographicData, metaData]) => {
+    d3.csv("data/main_papers.csv"),
+    d3.csv("data/references.csv"),
+    d3.csv("data/citation.csv")
+]).then(([cocitationData, bibliographicData, metaData, refData, citData]) => {
 
     metaData.forEach(row => {
         const cited = row.cited_by_count ? +row.cited_by_count : undefined;
@@ -965,6 +1268,7 @@ Promise.all([
 
     cocitationGraph.setData(cocitationData);
     bibliographicGraph.setData(bibliographicData);
+    sankeyGraph.setData(refData, citData);
     
     updateAllGraphs();
     setupAnalyticsControls();
