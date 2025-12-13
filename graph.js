@@ -624,6 +624,7 @@ function handleGlobalClear() {
 function updateAllSelections() {
     graphs.forEach(g => g.updateSelection(selectedNodeIds));
     updateAnalyticsSelection();
+    updateAnalytics(currentAnalyticsMode);
 }
 
 function updateAnalyticsSelection() {
@@ -728,47 +729,194 @@ function setupPanelToggle() {
             appContainer.classList.remove('panels-hidden');
             toggleBtn.classList.remove('panels-hidden');
         }
+        
+        if (window.updateAppLayout) {
+            window.updateAppLayout();
+        }
     });
 }
 
 setupPanelToggle();
 
-function setupNetworkTypeToggle() {
-    const cocitationCheckbox = document.getElementById('cocitation-checkbox');
-    const bibliographicCheckbox = document.getElementById('bibliographic-checkbox');
-    const appContainer = document.getElementById('app-container');
+function setupDragAndDrop() {
+    const draggables = document.querySelectorAll('.draggable-item');
+    const dropZones = document.querySelectorAll('.drop-zone');
+    const sourceContainer = document.querySelector('.draggable-source');
+    
+    // Map data-type to panel IDs
+    const panelMap = {
+        'cocitation': 'cocitation-panel',
+        'bibliographic': 'bibliographic-panel',
+        'sankey': 'sankey-panel'
+    };
 
-    if (!cocitationCheckbox || !bibliographicCheckbox || !appContainer) return;
+    let draggedItem = null;
 
-    function updateLayout() {
-        const cocitationChecked = cocitationCheckbox.checked;
-        const bibliographicChecked = bibliographicCheckbox.checked;
+    draggables.forEach(draggable => {
+        draggable.addEventListener('dragstart', () => {
+            draggedItem = draggable;
+            draggable.classList.add('dragging');
+        });
 
-        // Remove all network-related classes
-        appContainer.classList.remove('both-networks', 'only-cocitation', 'only-bibliographic');
+        draggable.addEventListener('dragend', () => {
+            draggable.classList.remove('dragging');
+            draggedItem = null;
+        });
+    });
 
-        if (cocitationChecked && bibliographicChecked) {
-            appContainer.classList.add('both-networks');
-        } else if (cocitationChecked) {
-            appContainer.classList.add('only-cocitation');
-        } else if (bibliographicChecked) {
-            appContainer.classList.add('only-bibliographic');
+    dropZones.forEach(zone => {
+        zone.addEventListener('dragover', e => {
+            e.preventDefault();
+            zone.classList.add('drag-over');
+        });
+
+        zone.addEventListener('dragleave', () => {
+            zone.classList.remove('drag-over');
+        });
+
+        zone.addEventListener('drop', e => {
+            e.preventDefault();
+            zone.classList.remove('drag-over');
+            
+            if (!draggedItem) return;
+
+            // If zone has an item, move it back to source
+            const existingItem = zone.querySelector('.draggable-item');
+            if (existingItem) {
+                sourceContainer.appendChild(existingItem);
+            }
+
+            zone.appendChild(draggedItem);
+            updateLayoutFromDrop();
+        });
+    });
+
+    // Also allow dropping back to source
+    sourceContainer.addEventListener('dragover', e => {
+        e.preventDefault();
+    });
+
+    sourceContainer.addEventListener('drop', e => {
+        e.preventDefault();
+        if (draggedItem) {
+            sourceContainer.appendChild(draggedItem);
+            updateLayoutFromDrop();
+        }
+    });
+
+    window.updateAppLayout = updateLayoutFromDrop;
+
+    function updateLayoutFromDrop() {
+        const zone1Item = document.querySelector('.drop-zone[data-zone="1"] .draggable-item');
+        const zone2Item = document.querySelector('.drop-zone[data-zone="2"] .draggable-item');
+        
+        const panel1Id = zone1Item ? panelMap[zone1Item.dataset.type] : null;
+        const panel2Id = zone2Item ? panelMap[zone2Item.dataset.type] : null;
+
+        const appContainer = document.getElementById('app-container');
+        const panels = ['cocitation-panel', 'bibliographic-panel', 'sankey-panel'];
+        
+        // Reset all panels
+        panels.forEach(id => {
+            const el = document.getElementById(id);
+            if(el) {
+                el.classList.add('hidden');
+                el.style.gridColumn = 'auto'; // Reset grid column
+            }
+        });
+
+        // Configure Layout
+        // Default Grid: 320px 1fr 1fr 360px
+        // We need to adjust columns based on visibility
+        
+        let gridTemplate = "320px ";
+        
+        // Panel 1
+        if (panel1Id) {
+            const p1 = document.getElementById(panel1Id);
+            p1.classList.remove('hidden');
+            // It will naturally flow into the first available grid track after side-panel
+            // We need to ensure it's in the DOM in the right order or assign specific tracks?
+            // Easier to just toggle visibility and let CSS Grid auto-placement work if we constrain columns.
+            // But we need to support "Panel 1 is left, Panel 2 is right".
+            
+            // Explicitly set order in CSS Grid via style if simpler, or just rely on DOM order?
+            // Since panels are siblings, let's just use explicit columns if possible or rely on "hidden" removing them from flow?
+            // "hidden" class uses display:none, so they are removed from grid flow.
+            
+            // If only Zone 1 is active: 320px 1fr 0fr 360px (or similar)
+            // If only Zone 2 is active: 320px 0fr 1fr 360px ? No, just one main area.
+            
+            gridTemplate += "1fr ";
+        } else {
+             gridTemplate += "0fr "; // Collapse
         }
 
-        // Prevent unchecking both
-        if (!cocitationChecked && !bibliographicChecked) {
-            cocitationCheckbox.checked = true;
-            appContainer.classList.add('only-cocitation');
+        // Panel 2
+        if (panel2Id) {
+             const p2 = document.getElementById(panel2Id);
+             p2.classList.remove('hidden');
+             gridTemplate += "1fr ";
+        } else {
+             gridTemplate += "0fr ";
         }
+
+        gridTemplate += "360px";
+
+        // Handle the case where both are active, we need to ensure they appear in the right visual order (Left vs Right)
+        // Since the DOM order is fixed (Cocitation, Bibliographic, Sankey), we might need `order` property
+        // or explicit grid-column assignment.
+        
+        // Let's use `order` style
+        // Side Panel is order 0 (default) or explicit grid-column 1.
+        
+        if (panel1Id) {
+            document.getElementById(panel1Id).style.order = "1";
+        }
+        if (panel2Id) {
+            document.getElementById(panel2Id).style.order = "2";
+        }
+        
+        // Analytics panel is forced to order 999 in CSS.
+        
+        // Apply Grid Template
+        if (!appContainer.classList.contains('panels-hidden')) {
+            appContainer.style.gridTemplateColumns = gridTemplate;
+        } else {
+            // If panels hidden, we preserve the 0fr logic for main content? 
+            // Actually if panels hidden, side/analytics are 0px.
+            // The middle parts should probably expand?
+            // Existing logic: 0px 1fr 1fr 0px
+            
+            let hiddenTemplate = "0px ";
+            hiddenTemplate += panel1Id ? "1fr " : "0fr ";
+            hiddenTemplate += panel2Id ? "1fr " : "0fr ";
+            hiddenTemplate += "0px";
+            appContainer.style.gridTemplateColumns = hiddenTemplate;
+        }
+        
+        // Also update ResizeObserver for graphs
+         setTimeout(() => {
+            updateAllGraphs();
+        }, 450); // Wait for transition
     }
 
-    cocitationCheckbox.addEventListener('change', updateLayout);
-    bibliographicCheckbox.addEventListener('change', updateLayout);
+    // Initial Setup: Place Co-citation in Zone 1, Bibliographic in Zone 2
+    const cocitationItem = sourceContainer.querySelector('[data-type="cocitation"]');
+    const bioItem = sourceContainer.querySelector('[data-type="bibliographic"]');
+    const zone1 = document.querySelector('.drop-zone[data-zone="1"]');
+    const zone2 = document.querySelector('.drop-zone[data-zone="2"]');
 
-    updateLayout();
+    if (cocitationItem && zone1) zone1.appendChild(cocitationItem);
+    if (bioItem && zone2) zone2.appendChild(bioItem);
+
+    // Initial Layout Update
+    updateLayoutFromDrop();
 }
 
-setupNetworkTypeToggle();
+setupDragAndDrop();
+
+let currentAnalyticsMode = "both";
 
 function setupAnalyticsControls() {
     const buttons = document.querySelectorAll('.rank-btn');
@@ -777,6 +925,7 @@ function setupAnalyticsControls() {
             buttons.forEach(b => b.classList.remove('active'));
             e.target.classList.add('active');
             const mode = e.target.dataset.mode;
+            currentAnalyticsMode = mode;
             updateAnalytics(mode);
         });
     });
@@ -873,7 +1022,7 @@ function updateAnalytics(mode = "both") {
     panel.selectAll(".heatmap-container").remove();
     panel.selectAll(".charts-grid").remove(); // Legacy cleanup
     panel.selectAll(".heatmap-legend").remove();
-    panel.selectAll(".histogram-container").remove();
+    panel.selectAll(".stability-chart-container").remove();
 
     // 4. Render Heatmap if we have read papers and results
     if (readPapers.length > 0 && top10.length > 0) {
@@ -1017,89 +1166,277 @@ function updateAnalytics(mode = "both") {
             .text(maxVal);
     }
 
-    // 5. Render Histogram
-    // Calculate Read Neighbor Counts for Unread Papers
-    const coverageCounts = new Map();
-    let maxReadNeighbors = 0;
+    // 5. Bootstrap Stability for Selected Papers
+    // "Repeatedly subsample references.csv (or citation.csv) rows and recompute... score-to-read"
+    // We simulate this by perturbing the edge weights (representing shared refs or citations)
+    // using a Binomial(w, p) approximation.
 
-    for (const p of unreadPapers) {
-        let readNeighbors = 0;
-        if (adjacency.has(p.id)) {
-            for (const neighborId of adjacency.get(p.id).keys()) {
-                if (readPaperIds.has(neighborId)) {
-                    readNeighbors++;
-                }
+    const targetPapers = [];
+    if (selectedNodeIds.size > 0) {
+        unreadPapers.forEach(p => {
+            if (selectedNodeIds.has(p.id)) {
+                targetPapers.push(p);
             }
-        }
-        const currentCount = coverageCounts.get(readNeighbors) || 0;
-        coverageCounts.set(readNeighbors, currentCount + 1);
-        if (readNeighbors > maxReadNeighbors) maxReadNeighbors = readNeighbors;
-    }
-
-    const histData = [];
-    for (let i = 0; i <= maxReadNeighbors; i++) {
-        histData.push({
-            bin: i,
-            count: coverageCounts.get(i) || 0
         });
     }
 
-    const histContainer = panel.append("div").attr("class", "histogram-container");
-    const hNode = histContainer.node();
-    const hWidth = hNode ? hNode.getBoundingClientRect().width : 300;
-    const hHeight = 220;
-    const hMargin = { top: 20, right: 20, bottom: 40, left: 40 };
-    const hInnerWidth = hWidth - hMargin.left - hMargin.right;
-    const hInnerHeight = hHeight - hMargin.top - hMargin.bottom;
+    // Only render stability chart if we have selected papers
+    // if (targetPapers.length === 0) {
+    //     updateAnalyticsSelection();
+    //     return;
+    // }
 
-    const histSvg = histContainer.append("svg")
-        .attr("width", hWidth)
-        .attr("height", hHeight);
+    const nBootstrap = 50;
+    const subsampleRate = 0.8;
+    // We re-rank the entire pool to ensure correct rank for any selected paper
+    const candidatePool = unreadPapers; 
+    const rankDistributions = new Map();
+    targetPapers.forEach(p => rankDistributions.set(p.id, []));
 
-    const hG = histSvg.append("g")
-        .attr("transform", `translate(${hMargin.left},${hMargin.top})`);
+    if (targetPapers.length > 0) {
+        for (let i = 0; i < nBootstrap; i++) {
+            // Calculate perturbed scores
+            const currentScores = [];
+            
+            for (const p of candidatePool) {
+                let perturbedScore = 0;
+                if (adjacency.has(p.id)) {
+                    for (const w of adjacency.get(p.id).values()) {
+                        // Simulate Binomial(n=w, p=subsampleRate)
+                        // Using Normal approximation for performance: N(w*p, w*p*(1-p))
+                        if (w > 0) {
+                            const mean = w * subsampleRate;
+                            const variance = w * subsampleRate * (1 - subsampleRate);
+                            const std = Math.sqrt(variance);
+                            // Box-Muller transform for Gaussian noise
+                            const u1 = Math.random();
+                            const u2 = Math.random();
+                            const z = Math.sqrt(-2.0 * Math.log(u1 || 1e-9)) * Math.cos(2.0 * Math.PI * u2);
+                            perturbedScore += Math.max(0, mean + z * std);
+                        }
+                    }
+                }
+                currentScores.push({ id: p.id, score: perturbedScore });
+            }
 
-    const xHist = d3.scaleBand()
-        .domain(histData.map(d => d.bin))
-        .range([0, hInnerWidth])
-        .padding(0.2);
+            // Sort descending
+            currentScores.sort((a, b) => b.score - a.score);
 
-    const yHist = d3.scaleLinear()
-        .domain([0, d3.max(histData, d => d.count) || 1])
-        .range([hInnerHeight, 0]);
+            // Record rank (1-based)
+            currentScores.forEach((item, index) => {
+                if (rankDistributions.has(item.id)) {
+                    rankDistributions.get(item.id).push(index + 1);
+                }
+            });
+        }
+    }
 
-    hG.selectAll(".hist-bar")
-        .data(histData)
-        .join("rect")
-        .attr("class", "hist-bar")
-        .attr("x", d => xHist(d.bin))
-        .attr("y", d => yHist(d.count))
-        .attr("width", xHist.bandwidth())
-        .attr("height", d => hInnerHeight - yHist(d.count));
+    // Prepare Box Plot Data
+	    const boxData = targetPapers.map(p => {
+	        const ranks = rankDistributions.get(p.id);
+	        ranks.sort((a, b) => a - b);
+	        return {
+	            id: p.id,
+	            title: p.title,
+	            min: ranks[0],
+	            q1: d3.quantile(ranks, 0.25),
+	            median: d3.quantile(ranks, 0.5),
+	            q3: d3.quantile(ranks, 0.75),
+	            max: ranks[ranks.length - 1]
+	        };
+	    });
 
-    // Axes
-    const xAxisG = hG.append("g")
-        .attr("class", "hist-axis")
-        .attr("transform", `translate(0,${hInnerHeight})`)
-        .call(d3.axisBottom(xHist).tickValues(xHist.domain().filter((d, i) => !(i % 2)))); // Filter ticks if many
+	    const stabContainer = panel.append("div").attr("class", "stability-chart-container");
+	    stabContainer.append("div")
+	        .style("font-size", "13px")
+	        .style("font-weight", "650")
+	        .style("color", "rgba(226, 232, 240, 0.9)")
+	        .style("margin-bottom", "8px")
+	        .style("padding-top", "12px")
+	        .style("text-align", "center")
+	        .text("Stability of Selected Papers (Bootstrap Ranks)");
 
-    const yAxisG = hG.append("g")
-        .attr("class", "hist-axis")
-        .call(d3.axisLeft(yHist).ticks(5));
+	    const stabNode = stabContainer.node();
+	    const measuredStabWidth = stabNode ? stabNode.getBoundingClientRect().width : 0;
+	    const stabWidth = Math.max(320, measuredStabWidth || 0);
+	    const stabHeight = Math.max(250, 100 + (targetPapers.length || 1) * 20);
+	    const stabMargin = { top: 22, right: 18, bottom: 44, left: 44 };
+	    const stabInnerWidth = stabWidth - stabMargin.left - stabMargin.right;
+	    const stabInnerHeight = stabHeight - stabMargin.top - stabMargin.bottom;
 
-    // Labels
-    hG.append("text")
-        .attr("class", "hist-label")
-        .attr("x", hInnerWidth / 2)
-        .attr("y", hInnerHeight + 35)
-        .text("# Read Neighbors");
+	    const stabSvg = stabContainer.append("svg")
+	        .attr("width", stabWidth)
+	        .attr("height", stabHeight);
 
-    hG.append("text")
-        .attr("class", "hist-label")
-        .attr("transform", "rotate(-90)")
-        .attr("x", -hInnerHeight / 2)
-        .attr("y", -30)
-        .text("# Unread Papers");
+    const gStab = stabSvg.append("g")
+        .attr("transform", `translate(${stabMargin.left},${stabMargin.top})`);
+
+	    // Y Axis: The Selected Papers (categorical)
+	    // We list them 1..N
+	    const yStab = d3.scaleBand()
+	        .domain(targetPapers.map((d, i) => i)) // use index 0..N-1
+	        .range([0, stabInnerHeight])
+	        .padding(0.2);
+
+	    // X Axis: Rank (1 to 50)
+	    // We want rank 1 on the LEFT.
+	    const maxObservedRank = d3.max(boxData, d => d.max) || 10;
+	    const xDomainMax = Math.max(15, maxObservedRank);
+	    const xStab = d3.scaleLinear()
+	        .domain([1, xDomainMax]) // Ensure at least a bit of spread shown
+	        .range([0, stabInnerWidth]);
+	    const xTickCount = Math.max(4, Math.floor(stabInnerWidth / 70));
+
+	    // Gridlines
+	    const stabGrid = gStab.append("g")
+	        .attr("class", "grid-lines")
+	        .attr("transform", `translate(0,${stabInnerHeight})`)
+	        .call(d3.axisBottom(xStab).ticks(xTickCount).tickSize(-stabInnerHeight).tickFormat(""));
+	    stabGrid.selectAll("line")
+	        .attr("stroke", "#94a3b8")
+	        .attr("stroke-opacity", 0.14);
+	    stabGrid.selectAll("path").remove();
+
+	    // X Axis
+	    const stabXAxis = gStab.append("g")
+	        .attr("transform", `translate(0,${stabInnerHeight})`)
+	        .call(d3.axisBottom(xStab).ticks(xTickCount));
+	    stabXAxis.selectAll("text")
+	        .attr("fill", "#888")
+	        .style("font-size", "10px");
+	    stabXAxis.selectAll("path, line")
+	        .attr("stroke", "#444");
+	
+	    gStab.append("text")
+	        .attr("x", stabInnerWidth / 2)
+	        .attr("y", stabInnerHeight + 34)
+	        .attr("fill", "#888")
+	        .style("text-anchor", "middle")
+	        .style("font-size", "10px")
+	        .text("Rank (lower is better)");
+
+	    // Y Axis (Paper numbers 1..N)
+	    const stabYAxis = gStab.append("g")
+	        .call(d3.axisLeft(yStab).tickFormat(i => i + 1));
+	    stabYAxis.selectAll("text")
+	        .attr("fill", "#888")
+	        .style("font-size", "10px");
+	    stabYAxis.selectAll("path, line")
+	        .attr("stroke", "#444");
+	
+	    // Violin (density) helper functions
+	    const kernelEpanechnikov = (bandwidth) => (v) => {
+	        const x = v / bandwidth;
+	        return Math.abs(x) <= 1 ? (0.75 * (1 - x * x)) / bandwidth : 0;
+	    };
+	    const kernelDensityEstimator = (kernel, xValues) => (sample) =>
+	        xValues.map(x => [x, d3.mean(sample, s => kernel(x - s)) || 0]);
+	
+	    const violinX = d3.range(1, xDomainMax + 0.5, 0.5);
+	    const kde = kernelDensityEstimator(kernelEpanechnikov(1.2), violinX);
+	    boxData.forEach(d => {
+	        const sample = rankDistributions.get(d.id) || [];
+	        d.density = sample.length ? kde(sample) : violinX.map(x => [x, 0]);
+	    });
+	    const maxDensity = d3.max(boxData, d => d3.max(d.density, v => v[1])) || 1;
+	    const violinScale = d3.scaleLinear()
+	        .domain([0, maxDensity])
+	        .range([0, yStab.bandwidth() / 2]);
+	    const violinArea = d3.area()
+	        .curve(d3.curveCatmullRom.alpha(0.6))
+	        .x(d => xStab(d[0]))
+	        .y0(d => -violinScale(d[1]))
+	        .y1(d => violinScale(d[1]));
+
+	    // Render Violin + Box Plots
+	    const groups = gStab.selectAll(".stab-row")
+	        .data(boxData)
+	        .join("g")
+	        .attr("class", "stab-row")
+	        .attr("transform", (d, i) => `translate(0, ${yStab(i) + yStab.bandwidth()/2})`);
+	
+	    groups.append("path")
+	        .attr("d", d => violinArea(d.density))
+	        .attr("fill", READ_NODE_COLOR)
+	        .attr("opacity", 0.18)
+	        .attr("stroke", READ_NODE_COLOR)
+	        .attr("stroke-opacity", 0.45)
+	        .attr("stroke-width", 1);
+	
+	    // Box/whiskers (outline only; no fill)
+	    const whiskerColor = "#94a3b8";
+	    const boxStroke = "#e2e8f0";
+	    const boxHeight = Math.max(12, yStab.bandwidth() * 0.62);
+	    const capSize = Math.max(8, yStab.bandwidth() * 0.55);
+	
+	    // Whisker line + caps (min to max)
+	    groups.append("line")
+	        .attr("x1", d => xStab(d.min))
+	        .attr("x2", d => xStab(d.max))
+	        .attr("stroke", whiskerColor)
+	        .attr("stroke-width", 1)
+	        .attr("stroke-opacity", 0.9);
+	    groups.append("line")
+	        .attr("x1", d => xStab(d.min))
+	        .attr("x2", d => xStab(d.min))
+	        .attr("y1", -capSize / 2)
+	        .attr("y2", capSize / 2)
+	        .attr("stroke", whiskerColor)
+	        .attr("stroke-width", 1)
+	        .attr("stroke-opacity", 0.9);
+	    groups.append("line")
+	        .attr("x1", d => xStab(d.max))
+	        .attr("x2", d => xStab(d.max))
+	        .attr("y1", -capSize / 2)
+	        .attr("y2", capSize / 2)
+	        .attr("stroke", whiskerColor)
+	        .attr("stroke-width", 1)
+	        .attr("stroke-opacity", 0.9);
+	
+	    // IQR box (q1 to q3)
+	    groups.append("rect")
+	        .attr("x", d => Math.min(xStab(d.q1), xStab(d.q3)))
+	        .attr("y", -boxHeight / 2)
+	        .attr("width", d => Math.max(8, Math.abs(xStab(d.q3) - xStab(d.q1))))
+	        .attr("height", boxHeight)
+	        .attr("fill", "none")
+	        .attr("stroke", boxStroke)
+	        .attr("stroke-opacity", 0.9)
+	        .attr("stroke-width", 1);
+	
+	    // Median line
+	    groups.append("line")
+	        .attr("x1", d => xStab(d.median))
+	        .attr("x2", d => xStab(d.median))
+	        .attr("y1", -boxHeight / 2)
+	        .attr("y2", boxHeight / 2)
+	        .attr("stroke", boxStroke)
+	        .attr("stroke-opacity", 0.95)
+	        .attr("stroke-width", 1);
+
+	    // Tooltip for papers
+	    groups.append("rect") // Invisible overlay for tooltip
+	        .attr("x", 0)
+	        .attr("y", -yStab.bandwidth()/2)
+	        .attr("width", stabInnerWidth)
+	        .attr("height", yStab.bandwidth())
+	        .attr("fill", "transparent")
+	        .style("cursor", "help")
+	        .on("mouseover", (event, d) => {
+	            const tooltip = d3.select(".heatmap-tooltip");
+	            tooltip.transition().duration(200).style("opacity", 1);
+	            tooltip.html(`
+	                <div><b>${d.title}</b></div>
+	                <div style="margin-top:4px;">Rank range: ${d.min} - ${d.max}</div>
+	                <div>Typical (IQR): ${d.q1} - ${d.q3}</div>
+	                <div>Median: ${d.median}</div>
+	            `)
+	            .style("left", (event.pageX + 10) + "px")
+	            .style("top", (event.pageY - 28) + "px");
+	        })
+	        .on("mouseout", () => {
+	             d3.select(".heatmap-tooltip").transition().duration(500).style("opacity", 0);
+	        });
 
     updateAnalyticsSelection();
 }

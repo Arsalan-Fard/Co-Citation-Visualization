@@ -12,7 +12,7 @@ body {
 
 #app-container {
     display: grid;
-    grid-template-columns: 320px 1fr 0fr 360px;
+    grid-template-columns: 320px 1fr 1fr 360px; /* Default split view */
     grid-template-rows: 1fr;
     height: 100vh;
     gap: 0;
@@ -20,46 +20,27 @@ body {
 }
 
 #app-container.panels-hidden {
-    grid-template-columns: 0px 1fr 0fr 0px;
-}
-
-#app-container.both-networks {
-    grid-template-columns: 320px 1fr 1fr 360px;
-}
-
-#app-container.both-networks.panels-hidden {
     grid-template-columns: 0px 1fr 1fr 0px;
 }
 
-#app-container.only-cocitation {
-    grid-template-columns: 320px 1fr 0fr 360px;
-}
-
-#app-container.only-cocitation.panels-hidden {
-    grid-template-columns: 0px 1fr 0fr 0px;
-}
-
-#app-container.only-bibliographic {
-    grid-template-columns: 320px 0fr 1fr 360px;
-}
-
-#app-container.only-bibliographic.panels-hidden {
-    grid-template-columns: 0px 0fr 1fr 0px;
-}
+/* Flexible View configurations controlled by JS via grid-column manipulation or specific classes */
+/* We will switch to a more dynamic grid based on visible panels */
 
 .main-panel {
     background: #1a1a1a;
     position: relative;
     overflow: hidden;
     min-width: 0;
+    /* Grid placement will be handled inline or by specific classes if needed */
 }
 
-#cocitation-panel {
-    grid-column: 2;
+.main-panel.hidden {
+    display: none;
 }
 
-#bibliographic-panel {
-    grid-column: 3;
+/* Override existing ID-based grid columns as they are now dynamic */
+#cocitation-panel, #bibliographic-panel, #sankey-panel {
+    grid-column: auto;
 }
 
 .panel-label {
@@ -90,7 +71,7 @@ body {
 }
 
 .analytics-panel {
-    grid-column: 4;
+    grid-column: 4; /* Fixed for now, JS might need to adjust if column counts change */
     display: flex;
     flex-direction: column;
     align-items: center;
@@ -100,6 +81,11 @@ body {
     padding: 25px 30px;
     overflow-y: auto;
     transition: transform 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+/* Ensure analytics panel stays at the end */
+#app-container > .analytics-panel {
+    order: 999;
 }
 
 .control-group {
@@ -533,4 +519,101 @@ body {
     margin-bottom: 15px;
     display: flex;
     justify-content: center;
+}
+
+.stability-chart-container {
+    width: 100%;
+    margin-bottom: 10px;
+}
+
+.stability-chart-container svg {
+    width: 100%;
+    display: block;
+}
+
+/* --- Drag and Drop Styles --- */
+.layout-controls {
+    display: flex;
+    flex-direction: column;
+    gap: 15px;
+}
+
+.draggable-source {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    background: #1f1f1f;
+    padding: 10px;
+    border-radius: 8px;
+    border: 1px solid #2a2a2a;
+    min-height: 40px;
+}
+
+.draggable-item {
+    padding: 6px 10px;
+    background: #333;
+    border: 1px solid #444;
+    border-radius: 4px;
+    font-size: 11px;
+    color: #ccc;
+    cursor: move;
+    user-select: none;
+    transition: transform 0.2s, box-shadow 0.2s;
+}
+
+.draggable-item:hover {
+    background: #444;
+    border-color: #555;
+    box-shadow: 0 2px 5px rgba(0,0,0,0.2);
+}
+
+.draggable-item.dragging {
+    opacity: 0.5;
+}
+
+.drop-zones {
+    display: flex;
+    flex-direction: row; /* Horizontal alignment */
+    gap: 10px;
+}
+
+.drop-zone {
+    flex: 1; /* Equal width */
+    height: 60px;
+    background: #1a1a1a;
+    border: 2px dashed #333;
+    border-radius: 8px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    position: relative;
+    transition: border-color 0.2s, background-color 0.2s;
+    padding: 4px; /* Small offset/padding for inner item */
+}
+
+.drop-zone.drag-over {
+    border-color: #667eea;
+    background: #222;
+}
+
+.zone-label {
+    font-size: 10px;
+    color: #555;
+    text-transform: uppercase;
+    pointer-events: none;
+    position: absolute; /* Keep label visible behind item or centered if empty */
+    z-index: 0;
+}
+
+.drop-zone .draggable-item {
+    margin: 0;
+    cursor: move;
+    width: 100%;
+    height: 100%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    box-sizing: border-box;
+    z-index: 1; /* Above label */
+    background: #333; /* Ensure background covers label */
 }

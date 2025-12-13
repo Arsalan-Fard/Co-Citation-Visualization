@@ -22,18 +22,30 @@
             <svg id="bibliographic-svg" class="graph-container"></svg>
         </div>
 
+        <div class="main-panel hidden" id="sankey-panel">
+            <div class="panel-label">Sankey Diagram</div>
+            <div style="display: flex; align-items: center; justify-content: center; height: 100%; color: #666; font-size: 14px;">
+                Sankey Diagram (Coming Soon)
+            </div>
+        </div>
+
         <div class="side-panel">
             <div class="control-group">
-                <label class="control-label">Network Type</label>
-                <div class="checkbox-group">
-                    <label class="checkbox-label">
-                        <input type="checkbox" id="cocitation-checkbox" class="checkbox" checked>
-                        <span>Co-citation Network</span>
-                    </label>
-                    <label class="checkbox-label">
-                        <input type="checkbox" id="bibliographic-checkbox" class="checkbox">
-                        <span>Bibliographic Coupling</span>
-                    </label>
+                <label class="control-label">Layout Control</label>
+                <div class="layout-controls">
+                    <div class="draggable-source">
+                        <div class="draggable-item" draggable="true" data-type="cocitation">Co-citation</div>
+                        <div class="draggable-item" draggable="true" data-type="bibliographic">Bibliographic</div>
+                        <div class="draggable-item" draggable="true" data-type="sankey">Sankey</div>
+                    </div>
+                    <div class="drop-zones">
+                        <div class="drop-zone" data-zone="1">
+                            <span class="zone-label">View 1</span>
+                        </div>
+                        <div class="drop-zone" data-zone="2">
+                            <span class="zone-label">View 2</span>
+                        </div>
+                    </div>
                 </div>
             </div>
 
