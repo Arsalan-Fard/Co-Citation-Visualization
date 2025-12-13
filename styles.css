@@ -223,18 +223,19 @@ body {
 
 .link {
     stroke: #aaa;
-    stroke-opacity: 0.6;
+    stroke-opacity: 0.4;
 }
 
 .link.highlighted {
     stroke: #0d47a1;
     stroke-opacity: 1;
-    stroke-width: 4px;
+    stroke-width: 1px;
 }
 
 
 .node {
     stroke: #1a1a1a;
+    opacity: 0.9;
     stroke-width: 1px;
     cursor: pointer;
     transition: all 0.2s;
@@ -387,7 +388,6 @@ body {
 
 .toggle-panels-btn {
     position: fixed;
-    left: 20px;
     bottom: 20px;
     width: 50px;
     height: 50px;
@@ -405,6 +405,14 @@ body {
     box-shadow: 0 4px 12px rgba(102, 126, 234, 0.4);
 }
 
+.toggle-panels-btn.left-toggle {
+    left: 20px;
+}
+
+.toggle-panels-btn.right-toggle {
+    right: 20px;
+}
+
 .toggle-panels-btn:hover {
     transform: scale(1.1);
     box-shadow: 0 6px 16px rgba(102, 126, 234, 0.6);
@@ -419,7 +427,7 @@ body {
     display: inline-block;
 }
 
-.toggle-panels-btn.panels-hidden .toggle-icon {
+.toggle-panels-btn.collapsed .toggle-icon {
     transform: rotate(180deg);
 }
 

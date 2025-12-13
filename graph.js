@@ -529,6 +529,8 @@ class NetworkVisualizer {
         this.highlightRead = true; // Default matches HTML checked state
         this.highlightSurvey = false;
         this.highlightCitation = false;
+        this.axisScaleX = 1;
+        this.axisScaleY = 1;
         
         this.setupSVG();
         this.setupResizeObserver();
@@ -688,8 +690,8 @@ class NetworkVisualizer {
             .attr("fill", "#2a2a2a");
 
         this.panZoomGroup = this.svg.append("g").attr("class", "panzoom-layer");
-        this.rotateGroup = this.panZoomGroup.append("g").attr("class", "rotate-layer");
-        this.graphGroup = this.rotateGroup.append("g").attr("class", "graph-layer");
+        // Removed rotateGroup, append graphGroup directly to panZoomGroup
+        this.graphGroup = this.panZoomGroup.append("g").attr("class", "graph-layer");
 
         this.zoom = d3.zoom()
             .filter((event) => !event.ctrlKey)
@@ -700,52 +702,48 @@ class NetworkVisualizer {
 
         this.svg.call(this.zoom);
 
-        // Rotation logic
-        let rotation = 0;
-        let rotating = false;
-        let startAngle = 0;
-        let startRotation = 0;
+        // Axis Scaling Logic
+        let scaling = false;
+        let startX = 0;
+        let startY = 0;
+        let startScaleX = 1;
+        let startScaleY = 1;
+        const self = this;
 
-        const angleFromCenter = (event) => {
-            const t = d3.zoomTransform(this.svg.node());
-            const [mx, my] = d3.pointer(event, this.svg.node());
-            const scx = this.width / 2;
-            const scy = this.height / 2;
-            const cx = (scx - t.x) / t.k;
-            const cy = (scy - t.y) / t.k;
-            const wx = (mx - t.x) / t.k;
-            const wy = (my - t.y) / t.k;
-            return {
-                angleDeg: Math.atan2(wy - cy, wx - cx) * 180 / Math.PI,
-                cx, cy
-            };
-        }
-
-        this.svg.on("pointerdown", (event) => {
+        this.svg.on("pointerdown.scale", (event) => {
             if (event.ctrlKey && event.button === 0) {
-                rotating = true;
-                const a = angleFromCenter(event);
-                startAngle = a.angleDeg;
-                startRotation = rotation;
-                this.svg.style("cursor", "grabbing");
+                scaling = true;
+                startX = event.clientX;
+                startY = event.clientY;
+                startScaleX = self.axisScaleX;
+                startScaleY = self.axisScaleY;
+                self.svg.style("cursor", "crosshair");
                 event.preventDefault();
+                event.stopImmediatePropagation(); // Prevent Zoom
             }
         });
 
-        this.svg.on("pointermove", (event) => {
-            if (!rotating) return;
-            const a = angleFromCenter(event);
-            rotation = startRotation + (a.angleDeg - startAngle);
-            this.rotateGroup.attr(
-                "transform",
-                `translate(${a.cx},${a.cy}) rotate(${rotation}) translate(${-a.cx},${-a.cy})`
-            );
+        const winNs = "pointermove.scale." + (this.svg.attr("id") || Math.random());
+
+        d3.select(window).on(winNs, (event) => {
+            if (!scaling) return;
+            const dx = event.clientX - startX;
+            const dy = event.clientY - startY;
+            const k = 0.005;
+            
+            self.axisScaleX = Math.max(0.1, startScaleX * (1 + dx * k));
+            self.axisScaleY = Math.max(0.1, startScaleY * (1 - dy * k));
+            
+            // Basic throttling via RAF is handled by the browser event loop mostly, 
+            // but updateGraph might be heavy. 
+            self.updateGraph(); 
         });
 
-        this.svg.on("pointerup pointerleave", () => {
-            if (!rotating) return;
-            rotating = false;
-            this.svg.style("cursor", null);
+        d3.select(window).on(winNs.replace("move", "up"), () => {
+            if (scaling) {
+                scaling = false;
+                self.svg.style("cursor", null);
+            }
         });
 
         this.svg.on("click", (event) => {
@@ -765,6 +763,13 @@ class NetworkVisualizer {
     setData(data) {
         this.rawData = data;
         this.updateGraph();
+        this.resetZoom();
+    }
+    
+    resetZoom() {
+        if (this.zoom) {
+            this.svg.call(this.zoom.transform, d3.zoomIdentity);
+        }
     }
 
     updateGraph() {
@@ -867,8 +872,16 @@ class NetworkVisualizer {
             .domain(fullStrengthExtent)
             .range([0.1, 0.6]);
 
-        const horizontalRange = [horizontalPadding, Math.max(horizontalPadding + 10, this.width - horizontalPadding)];
-        const verticalRange = [this.height - 80, 40];
+        const centerX = this.width / 2;
+        const centerY = this.height / 2;
+        
+        const baseW = Math.max(10, this.width - 2 * horizontalPadding);
+        const scaledW = baseW * this.axisScaleX;
+        const horizontalRange = [centerX - scaledW / 2, centerX + scaledW / 2];
+
+        const baseH = Math.max(10, this.height - 120);
+        const scaledH = baseH * this.axisScaleY;
+        const verticalRange = [centerY + scaledH / 2, centerY - scaledH / 2];
 
         const xMetricInfo = resolveMetricPreference(xAxisMetric, nodes);
         const yMetricInfo = resolveMetricPreference(yAxisMetric, nodes);
@@ -958,8 +971,7 @@ class NetworkVisualizer {
         const xRange = xScale.range();
         const xMin = Math.min(...xRange);
         const xMax = Math.max(...xRange);
-        const centerX = (xMin + xMax) / 2;
-        const centerY = (yMin + yMax) / 2;
+        // centerX, centerY already defined above
 
         const xMetricDef = AXIS_METRICS[xMetricInfo.key];
         const yMetricDef = AXIS_METRICS[yMetricInfo.key];
@@ -1102,7 +1114,7 @@ class NetworkVisualizer {
             this.simulation = null;
         }
 
-        this.svg.call(this.zoom.transform, d3.zoomIdentity);
+        // this.svg.call(this.zoom.transform, d3.zoomIdentity); // Removed unconditional zoom reset
         
         if (this.svg.attr("id") === "graph-svg") {
              document.getElementById('node-count').textContent = nodes.length.toLocaleString();
@@ -1267,34 +1279,29 @@ function setupControls() {
 setupControls();
 
 function setupPanelToggle() {
-    const toggleBtn = document.getElementById('toggle-panels-btn');
+    const leftBtn = document.getElementById('toggle-left-panel-btn');
+    const rightBtn = document.getElementById('toggle-right-panel-btn');
     const sidePanel = document.querySelector('.side-panel');
     const analyticsPanel = document.querySelector('.analytics-panel');
     const appContainer = document.getElementById('app-container');
 
-    if (!toggleBtn || !sidePanel || !analyticsPanel || !appContainer) return;
+    if (leftBtn && sidePanel) {
+        leftBtn.addEventListener('click', () => {
+            const isHidden = sidePanel.classList.toggle('hidden');
+            leftBtn.classList.toggle('collapsed', isHidden);
+            appContainer.classList.toggle('left-hidden', isHidden);
+            if (window.updateAppLayout) window.updateAppLayout();
+        });
+    }
 
-    let panelsHidden = false;
-
-    toggleBtn.addEventListener('click', () => {
-        panelsHidden = !panelsHidden;
-
-        if (panelsHidden) {
-            sidePanel.classList.add('hidden');
-            analyticsPanel.classList.add('hidden');
-            appContainer.classList.add('panels-hidden');
-            toggleBtn.classList.add('panels-hidden');
-        } else {
-            sidePanel.classList.remove('hidden');
-            analyticsPanel.classList.remove('hidden');
-            appContainer.classList.remove('panels-hidden');
-            toggleBtn.classList.remove('panels-hidden');
-        }
-        
-        if (window.updateAppLayout) {
-            window.updateAppLayout();
-        }
-    });
+    if (rightBtn && analyticsPanel) {
+        rightBtn.addEventListener('click', () => {
+            const isHidden = analyticsPanel.classList.toggle('hidden');
+            rightBtn.classList.toggle('collapsed', isHidden);
+            appContainer.classList.toggle('right-hidden', isHidden);
+            if (window.updateAppLayout) window.updateAppLayout();
+        });
+    }
 }
 
 setupPanelToggle();
@@ -1387,10 +1394,10 @@ function setupDragAndDrop() {
         });
 
         // Configure Layout
-        // Default Grid: 320px 1fr 1fr 360px
-        // We need to adjust columns based on visibility
+        const leftHidden = appContainer.classList.contains('left-hidden');
+        const rightHidden = appContainer.classList.contains('right-hidden');
         
-        let gridTemplate = "320px ";
+        let gridTemplate = (leftHidden ? "0px " : "320px ");
         
         // Panel 1
         if (panel1Id) {
@@ -1412,29 +1419,13 @@ function setupDragAndDrop() {
              gridTemplate += "0fr ";
         }
 
-        gridTemplate += "360px";
+        gridTemplate += (rightHidden ? "0px" : "360px");
 
         // Remove order properties as we are using explicit grid columns now
         if (panel1Id) document.getElementById(panel1Id).style.order = "";
         if (panel2Id) document.getElementById(panel2Id).style.order = "";
         
-        // Analytics panel is forced to order 999 in CSS.
-        
-        // Apply Grid Template
-        if (!appContainer.classList.contains('panels-hidden')) {
-            appContainer.style.gridTemplateColumns = gridTemplate;
-        } else {
-            // If panels hidden, we preserve the 0fr logic for main content? 
-            // Actually if panels hidden, side/analytics are 0px.
-            // The middle parts should probably expand?
-            // Existing logic: 0px 1fr 1fr 0px
-            
-            let hiddenTemplate = "0px ";
-            hiddenTemplate += panel1Id ? "1fr " : "0fr ";
-            hiddenTemplate += panel2Id ? "1fr " : "0fr ";
-            hiddenTemplate += "0px";
-            appContainer.style.gridTemplateColumns = hiddenTemplate;
-        }
+        appContainer.style.gridTemplateColumns = gridTemplate;
         
         // Also update ResizeObserver for graphs
          setTimeout(() => {
@@ -1442,14 +1433,11 @@ function setupDragAndDrop() {
         }, 450); // Wait for transition
     }
 
-    // Initial Setup: Place Co-citation in Zone 1, Bibliographic in Zone 2
+    // Initial Setup: Place Co-citation in Zone 1, others remain in source
     const cocitationItem = sourceContainer.querySelector('[data-type="cocitation"]');
-    const bioItem = sourceContainer.querySelector('[data-type="bibliographic"]');
     const zone1 = document.querySelector('.drop-zone[data-zone="1"]');
-    const zone2 = document.querySelector('.drop-zone[data-zone="2"]');
 
     if (cocitationItem && zone1) zone1.appendChild(cocitationItem);
-    if (bioItem && zone2) zone2.appendChild(bioItem);
 
     // Initial Layout Update
     updateLayoutFromDrop();
