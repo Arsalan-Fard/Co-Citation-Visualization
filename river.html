@@ -1,0 +1,484 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Foundations ↔ Audience River</title>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/d3/7.8.5/d3.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/d3-sankey@0.12.3/dist/d3-sankey.min.js"></script>
+  <script src="river.js" defer></script>
+  <style>
+    :root {
+      --bg: #0b1220;
+      --panel: rgba(255, 255, 255, 0.06);
+      --stroke: rgba(148, 163, 184, 0.25);
+      --text: rgba(226, 232, 240, 0.92);
+      --muted: rgba(226, 232, 240, 0.65);
+      --muted2: rgba(226, 232, 240, 0.45);
+      --accent: #60a5fa;
+      --good: #4ade80;
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      margin: 0;
+      font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, "Apple Color Emoji", "Segoe UI Emoji";
+      color: var(--text);
+      background: radial-gradient(1200px 800px at 20% 20%, rgba(96, 165, 250, 0.12), transparent 50%),
+        radial-gradient(1000px 700px at 80% 10%, rgba(168, 85, 247, 0.12), transparent 55%),
+        radial-gradient(900px 700px at 60% 90%, rgba(74, 222, 128, 0.08), transparent 55%),
+        var(--bg);
+      min-height: 100vh;
+    }
+
+    header {
+      padding: 18px 18px 6px 18px;
+      border-bottom: 1px solid rgba(148, 163, 184, 0.18);
+      background: rgba(2, 6, 23, 0.25);
+      backdrop-filter: blur(10px);
+      position: sticky;
+      top: 0;
+      z-index: 2;
+    }
+
+    .title-row {
+      display: flex;
+      flex-wrap: wrap;
+      justify-content: space-between;
+      align-items: baseline;
+      gap: 12px;
+    }
+
+    h1 {
+      margin: 0;
+      font-size: 18px;
+      font-weight: 650;
+      letter-spacing: 0.2px;
+    }
+
+    .subtitle {
+      margin: 8px 0 0 0;
+      color: var(--muted);
+      max-width: 1100px;
+      line-height: 1.35;
+      font-size: 13px;
+    }
+
+    .layout {
+      display: grid;
+      grid-template-columns: 1.4fr 0.9fr;
+      gap: 14px;
+      padding: 14px 14px 18px 14px;
+      align-items: start;
+    }
+
+    @media (max-width: 1100px) {
+      .layout {
+        grid-template-columns: 1fr;
+      }
+    }
+
+    .card {
+      border: 1px solid var(--stroke);
+      background: var(--panel);
+      border-radius: 14px;
+      overflow: hidden;
+      box-shadow: 0 12px 32px rgba(0, 0, 0, 0.22);
+    }
+
+    .card h2 {
+      margin: 0;
+      font-size: 13px;
+      font-weight: 650;
+      letter-spacing: 0.2px;
+      color: rgba(226, 232, 240, 0.9);
+    }
+
+    .card-header {
+      display: flex;
+      gap: 12px;
+      justify-content: space-between;
+      align-items: center;
+      padding: 10px 12px;
+      background: rgba(255, 255, 255, 0.035);
+      border-bottom: 1px solid var(--stroke);
+    }
+
+    .card-body {
+      padding: 12px;
+    }
+
+    .controls {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+      padding: 10px 12px;
+      background: rgba(255, 255, 255, 0.03);
+      border-bottom: 1px solid var(--stroke);
+      align-items: end;
+    }
+
+    .control {
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+      min-width: 160px;
+    }
+
+    .control small {
+      color: var(--muted2);
+      font-size: 11px;
+    }
+
+    select,
+    input[type="number"] {
+      width: 100%;
+      border-radius: 10px;
+      border: 1px solid rgba(148, 163, 184, 0.25);
+      background: rgba(15, 23, 42, 0.55);
+      color: var(--text);
+      padding: 8px 10px;
+      font-size: 12px;
+      outline: none;
+    }
+
+    .checkbox-row {
+      display: flex;
+      gap: 8px;
+      align-items: center;
+      margin-top: 6px;
+      color: var(--muted);
+      font-size: 12px;
+    }
+
+    .pill {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      padding: 6px 10px;
+      border: 1px solid rgba(148, 163, 184, 0.25);
+      border-radius: 999px;
+      background: rgba(15, 23, 42, 0.4);
+      color: var(--muted);
+      font-size: 12px;
+      white-space: nowrap;
+    }
+
+    .pill .dot {
+      width: 10px;
+      height: 10px;
+      border-radius: 999px;
+      display: inline-block;
+    }
+
+    .viz-wrap {
+      position: relative;
+      width: 100%;
+      height: 690px;
+    }
+
+    @media (max-width: 1100px) {
+      .viz-wrap {
+        height: 620px;
+      }
+    }
+
+    svg {
+      width: 100%;
+      height: 100%;
+      display: block;
+    }
+
+    .overlay {
+      position: absolute;
+      inset: 0;
+      display: none;
+      align-items: center;
+      justify-content: center;
+      padding: 14px;
+      text-align: center;
+      color: var(--muted);
+      background: rgba(2, 6, 23, 0.55);
+      backdrop-filter: blur(6px);
+      font-size: 13px;
+      line-height: 1.35;
+    }
+
+    .overlay strong {
+      color: rgba(226, 232, 240, 0.92);
+    }
+
+    .legend-row {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      align-items: center;
+      justify-content: flex-end;
+    }
+
+    .hint {
+      color: var(--muted2);
+      font-size: 12px;
+      padding: 0 12px 12px 12px;
+    }
+
+    .list {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+
+    .item {
+      border: 1px solid rgba(148, 163, 184, 0.22);
+      background: rgba(15, 23, 42, 0.32);
+      border-radius: 12px;
+      padding: 10px 10px;
+      cursor: pointer;
+      transition: transform 120ms ease, border-color 120ms ease, background 120ms ease;
+    }
+
+    .item:hover {
+      transform: translateY(-1px);
+      border-color: rgba(96, 165, 250, 0.45);
+      background: rgba(15, 23, 42, 0.42);
+    }
+
+    .item.selected {
+      border-color: rgba(96, 165, 250, 0.6);
+      box-shadow: 0 0 0 3px rgba(96, 165, 250, 0.14);
+    }
+
+    .item-title {
+      font-size: 12.5px;
+      font-weight: 650;
+      color: rgba(226, 232, 240, 0.92);
+      line-height: 1.25;
+    }
+
+    .item-meta {
+      margin-top: 6px;
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 6px 10px;
+      font-size: 11px;
+      color: var(--muted);
+    }
+
+    .kv {
+      display: flex;
+      gap: 6px;
+      align-items: baseline;
+    }
+
+    .kv span:first-child {
+      color: rgba(226, 232, 240, 0.6);
+      font-weight: 600;
+      min-width: 70px;
+    }
+
+    .details {
+      display: grid;
+      gap: 8px;
+    }
+
+    .badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 4px 8px;
+      border-radius: 999px;
+      font-size: 11px;
+      border: 1px solid rgba(148, 163, 184, 0.25);
+      width: fit-content;
+      color: var(--muted);
+      background: rgba(15, 23, 42, 0.36);
+    }
+
+    .badge .dot {
+      width: 9px;
+      height: 9px;
+      border-radius: 999px;
+    }
+
+    .small-viz {
+      height: 160px;
+      width: 100%;
+      border: 1px solid rgba(148, 163, 184, 0.18);
+      border-radius: 12px;
+      background: rgba(2, 6, 23, 0.18);
+      overflow: hidden;
+    }
+
+    .small-viz-title {
+      font-size: 11px;
+      color: rgba(226, 232, 240, 0.7);
+      font-weight: 650;
+      letter-spacing: 0.15px;
+      margin: 2px 0 0 0;
+    }
+
+    .sankey-node-label {
+      font-size: 11px;
+      fill: rgba(226, 232, 240, 0.78);
+      pointer-events: none;
+    }
+
+    .sankey-link {
+      fill: none;
+      stroke-opacity: 0.22;
+      mix-blend-mode: screen;
+    }
+
+    .sankey-node {
+      stroke: rgba(226, 232, 240, 0.25);
+      stroke-width: 1;
+      rx: 4;
+    }
+
+    .dimmed {
+      opacity: 0.08;
+    }
+
+    .highlighted {
+      opacity: 1 !important;
+      stroke-opacity: 0.75 !important;
+    }
+
+    .axis-label {
+      fill: rgba(226, 232, 240, 0.6);
+      font-size: 11px;
+      font-weight: 650;
+      letter-spacing: 0.25px;
+      text-transform: uppercase;
+    }
+  </style>
+</head>
+
+<body>
+  <header>
+    <div class="title-row">
+      <h1>Foundations ↔ Audience River</h1>
+      <div class="legend-row">
+        <span class="pill"><span class="dot" style="background: var(--good);"></span>Read (stronger opacity)</span>
+        <span class="pill"><span class="dot" style="background: rgba(148, 163, 184, 0.9);"></span>Unread (lighter opacity)</span>
+        <span class="pill"><span class="dot" style="background: var(--accent);"></span>Links colored by paper topic</span>
+      </div>
+    </div>
+    <p class="subtitle">
+      Story: the references of your read papers reveal your <strong>foundations</strong>; the topics of papers citing your set reveal your
+      <strong>audience</strong>. The “bridge shortlist” highlights unread papers that stay grounded in your current foundations while reaching
+      audiences you haven’t covered yet.
+    </p>
+  </header>
+
+  <div class="layout">
+    <section class="card">
+      <div class="controls">
+        <div class="control">
+          <small>Foundations dimension</small>
+          <select id="foundation-dim">
+            <option value="paper_field" selected>Field (few categories)</option>
+            <option value="paper_subfield">Subfield</option>
+            <option value="paper_topic">Topic (top-N only)</option>
+          </select>
+        </div>
+
+        <div class="control">
+          <small>Audience dimension</small>
+          <select id="audience-dim">
+            <option value="paper_field" selected>Field (few categories)</option>
+            <option value="paper_subfield">Subfield</option>
+            <option value="paper_topic">Topic (top-N only)</option>
+          </select>
+        </div>
+
+        <div class="control">
+          <small>Paper scope</small>
+          <select id="paper-scope">
+            <option value="story" selected>Story: read + top bridges</option>
+            <option value="all">All papers</option>
+            <option value="read">Read only</option>
+            <option value="unread">Unread only</option>
+          </select>
+        </div>
+
+        <div class="control">
+          <small>Top categories (each side)</small>
+          <input id="top-categories" type="number" min="6" max="30" step="1" value="12" />
+          <label class="checkbox-row">
+            <input id="show-other" type="checkbox" checked />
+            <span>Group the rest as “Other”</span>
+          </label>
+        </div>
+
+        <div class="control">
+          <small>Weight mode</small>
+          <select id="weight-mode">
+            <option value="count" selected>Counts (volume)</option>
+            <option value="share">Per-paper shares (composition)</option>
+          </select>
+        </div>
+      </div>
+
+      <div class="card-header">
+        <h2>River (Foundations → Papers → Audience)</h2>
+        <div class="pill" id="river-stats">Loading…</div>
+      </div>
+      <div class="viz-wrap" id="sankey-wrap">
+        <svg id="river-sankey" aria-label="Foundations to audience Sankey"></svg>
+        <div class="overlay" id="overlay"></div>
+      </div>
+      <div class="hint">Tip: hover to spotlight flows; click a paper node or a shortlist item to lock selection and show mini-breakdowns.</div>
+    </section>
+
+    <aside class="side">
+      <section class="card">
+        <div class="card-header">
+          <h2>Topic Coverage (Read vs Unread)</h2>
+          <div class="pill" id="coverage-stats">—</div>
+        </div>
+        <div class="card-body" style="padding: 10px 12px 12px 12px;">
+          <div class="small-viz" style="height: 240px;">
+            <svg id="coverage-bars" aria-label="Topic read coverage bars"></svg>
+          </div>
+        </div>
+      </section>
+
+      <section class="card" style="margin-top: 14px;">
+        <div class="card-header">
+          <h2>Bridge Shortlist (Unread)</h2>
+          <div class="pill" id="bridge-stats">—</div>
+        </div>
+        <div class="card-body">
+          <div class="list" id="bridge-list"></div>
+        </div>
+      </section>
+
+      <section class="card" style="margin-top: 14px;">
+        <div class="card-header">
+          <h2>Selected Paper</h2>
+          <div class="pill" id="selection-pill">None</div>
+        </div>
+        <div class="card-body">
+          <div class="details" id="paper-details"></div>
+          <div style="display: grid; gap: 10px; margin-top: 10px;">
+            <div>
+              <div class="small-viz-title">Foundations (top categories)</div>
+              <div class="small-viz"><svg id="paper-foundations"></svg></div>
+            </div>
+            <div>
+              <div class="small-viz-title">Audience (top categories)</div>
+              <div class="small-viz"><svg id="paper-audience"></svg></div>
+            </div>
+          </div>
+        </div>
+      </section>
+    </aside>
+  </div>
+</body>
+
+</html>

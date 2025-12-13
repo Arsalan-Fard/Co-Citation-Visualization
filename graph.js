@@ -12,6 +12,7 @@ let positionStability = 1;
 // Global data storage
 let globalCocitationData = [];
 let globalBibliographicData = [];
+let selectedNodeIds = new Set();
 
 const horizontalPadding = 80;
 const axisNumberFormatter = d3.format(",");
@@ -164,23 +165,20 @@ class NetworkVisualizer {
         this.resizeObserver.observe(this.panel);
     }
 
-    highlightNode(nodeId) {
+    updateSelection(selectedSet) {
         this.graphGroup.selectAll(".link").classed("highlighted", false);
         this.graphGroup.selectAll(".node").classed("selected", false);
 
+        if (selectedSet.size === 0) return;
+
         this.graphGroup.selectAll(".link")
-            .filter(l => l.sourceId === nodeId || l.targetId === nodeId)
+            .filter(l => selectedSet.has(l.sourceId) || selectedSet.has(l.targetId))
             .classed("highlighted", true);
 
         this.graphGroup.selectAll(".node")
-            .filter(d => d.id === nodeId)
+            .filter(d => selectedSet.has(d.id))
             .classed("selected", true)
             .raise();
-    }
-
-    clearHighlight() {
-        this.graphGroup.selectAll(".link").classed("highlighted", false);
-        this.graphGroup.selectAll(".node").classed("selected", false);
     }
 
     setupSVG() {
@@ -598,6 +596,9 @@ class NetworkVisualizer {
                 document.getElementById('strength-range').textContent = "-";
             }
         }
+        
+        // Apply current selection to newly rendered graph
+        this.updateSelection(selectedNodeIds);
     }
 }
 
@@ -607,33 +608,30 @@ const bibliographicGraph = new NetworkVisualizer("#bibliographic-svg", bibliogra
 function handleGlobalNodeClick(event, d) {
     event.stopPropagation();
     const nodeId = d.id;
-    graphs.forEach(g => g.highlightNode(nodeId));
-    highlightAnalytics(nodeId);
+    if (selectedNodeIds.has(nodeId)) {
+        selectedNodeIds.delete(nodeId);
+    } else {
+        selectedNodeIds.add(nodeId);
+    }
+    updateAllSelections();
 }
 
 function handleGlobalClear() {
-    graphs.forEach(g => g.clearHighlight());
-    clearAnalyticsHighlight();
+    selectedNodeIds.clear();
+    updateAllSelections();
 }
 
-function highlightAnalytics(nodeId) {
-    d3.selectAll(".paper-item").classed("selected", false);
-    d3.select(`.paper-item[data-id='${nodeId}']`).classed("selected", true);
+function updateAllSelections() {
+    graphs.forEach(g => g.updateSelection(selectedNodeIds));
+    updateAnalyticsSelection();
+}
 
+function updateAnalyticsSelection() {
+    // Only update heatmap selection visuals
     const container = d3.select(".heatmap-container");
-    container.classed("has-selection", true);
-    
-    container.selectAll(".heatmap-cell").classed("highlighted", false);
+    container.classed("has-selection", selectedNodeIds.size > 0);
     container.selectAll(".heatmap-cell")
-        .filter(d => d.unreadId === nodeId)
-        .classed("highlighted", true);
-}
-
-function clearAnalyticsHighlight() {
-    d3.selectAll(".paper-item").classed("selected", false);
-    const container = d3.select(".heatmap-container");
-    container.classed("has-selection", false);
-    container.selectAll(".heatmap-cell").classed("highlighted", false);
+        .classed("highlighted", d => selectedNodeIds.has(d.unreadId));
 }
 
 const graphs = [cocitationGraph, bibliographicGraph];
@@ -704,8 +702,6 @@ function setupControls() {
     }
 }
 
-// Global resize listener removed; handled by ResizeObserver in visualizers
-
 setupControls();
 
 function setupPanelToggle() {
@@ -732,8 +728,6 @@ function setupPanelToggle() {
             appContainer.classList.remove('panels-hidden');
             toggleBtn.classList.remove('panels-hidden');
         }
-        
-        // No explicit update needed; ResizeObserver will catch it
     });
 }
 
@@ -766,14 +760,11 @@ function setupNetworkTypeToggle() {
             cocitationCheckbox.checked = true;
             appContainer.classList.add('only-cocitation');
         }
-        
-        // No explicit update needed; ResizeObserver will catch it
     }
 
     cocitationCheckbox.addEventListener('change', updateLayout);
     bibliographicCheckbox.addEventListener('change', updateLayout);
 
-    // Initialize layout
     updateLayout();
 }
 
@@ -852,18 +843,17 @@ function updateAnalytics(mode = "both") {
         globalBibliographicData.forEach(d => addEdge(d.paper1, d.paper2, +d.coupling_strength));
     }
 
-    // 2. Calculate scores for all unread papers
-    // Initialize with 0 for all known papers to ensure we cover disconnected ones if needed, 
-    // though here we care about ranking unread ones.
-    const unreadPapers = [];
+    // 2. Identify Read and Unread Papers
     const readPapers = [];
+    const unreadPapers = [];
+    const readPaperIds = new Set();
 
     for (const [id, meta] of paperMeta.entries()) {
         if (meta.isRead) {
             readPapers.push({ id, title: meta.title });
+            readPaperIds.add(id);
         } else {
-            // Calculate score based on sum of weights in current adjacency
-            // Note: degree in this context is usually sum of edge weights
+            // Score for top 10 (still used for heatmap columns)
             let score = 0;
             if (adjacency.has(id)) {
                 for (const w of adjacency.get(id).values()) {
@@ -882,6 +872,8 @@ function updateAnalytics(mode = "both") {
     panel.selectAll(".paper-list").remove();
     panel.selectAll(".heatmap-container").remove();
     panel.selectAll(".charts-grid").remove(); // Legacy cleanup
+    panel.selectAll(".heatmap-legend").remove();
+    panel.selectAll(".histogram-container").remove();
 
     // 4. Render Heatmap if we have read papers and results
     if (readPapers.length > 0 && top10.length > 0) {
@@ -914,17 +906,9 @@ function updateAnalytics(mode = "both") {
         // Sort rows by total strength descending
         matrix.sort((a, b) => b.totalStrength - a.totalStrength);
 
-        // Dimensions
-        // We have 10 columns. Width depends on panel width.
-        // Let's assume a fixed aspect ratio or max width.
         const containerNode = heatmapContainer.node();
-        // Use a default width if not mounted yet (though it should be)
         const totalWidth = containerNode ? containerNode.getBoundingClientRect().width : 300;
-        const margin = { top: 20, right: 0, bottom: 0, left: 0 }; // Minimal margins
-        // Reserve some space for row labels? The prompt says "rows are read papers". 
-        // Showing text titles for rows might take too much space. 
-        // User didn't explicitly ask for text labels, just "rows are read papers".
-        // I will use tooltips for details and small rects.
+        const margin = { top: 20, right: 0, bottom: 0, left: 0 };
         
         const cellSize = Math.floor((totalWidth - margin.left - margin.right) / 10);
         const height = matrix.length * cellSize + margin.top + margin.bottom;
@@ -947,7 +931,7 @@ function updateAnalytics(mode = "both") {
             .text((d, i) => i + 1);
 
         const colorScale = d3.scaleSequential(d3.interpolateViridis)
-            .domain([0, maxVal || 1]); // Use maxVal. If 0, avoid /0
+            .domain([0, maxVal || 1]); 
 
         // Create tooltip div if not exists
         let tooltip = d3.select("body").select(".heatmap-tooltip");
@@ -981,17 +965,13 @@ function updateAnalytics(mode = "both") {
                     tooltip.transition().duration(500).style("opacity", 0);
                 })
                 .on("click", (event, d) => {
-                    // Highlight both nodes?
                     handleGlobalNodeClick(event, {id: d.unreadId}); 
-                    // Optional: highlight read node too? The visualizer supports single highlighting mostly.
-                    // But our global handler effectively highlights one node.
                 });
         });
 
         // Legend
-        panel.selectAll(".heatmap-legend").remove();
         const legendContainer = panel.append("div").attr("class", "heatmap-legend");
-        const legendWidth = totalWidth - margin.left - margin.right - 10;
+        const legendWidth = totalWidth - margin.left - margin.right;
         const legendHeight = 10;
         const legendSvg = legendContainer.append("svg")
             .attr("width", totalWidth)
@@ -1037,22 +1017,89 @@ function updateAnalytics(mode = "both") {
             .text(maxVal);
     }
 
-    // 5. Render List
-    const list = panel.append("div").attr("class", "paper-list");
-    
-    top10.forEach((p, i) => {
-        const item = list.append("div")
-            .attr("class", "paper-item")
-            .attr("data-id", p.id)
-            .on("click", (event) => handleGlobalNodeClick(event, {id: p.id}));
-            
-        item.append("div")
-            .attr("class", "paper-title")
-            .attr("title", p.title)
-            .text(`${i + 1}. ${p.title}`);
-            
-        item.append("div")
-            .attr("class", "paper-metric")
-            .text(`Strength: ${p.score.toLocaleString()}`);
-    });
+    // 5. Render Histogram
+    // Calculate Read Neighbor Counts for Unread Papers
+    const coverageCounts = new Map();
+    let maxReadNeighbors = 0;
+
+    for (const p of unreadPapers) {
+        let readNeighbors = 0;
+        if (adjacency.has(p.id)) {
+            for (const neighborId of adjacency.get(p.id).keys()) {
+                if (readPaperIds.has(neighborId)) {
+                    readNeighbors++;
+                }
+            }
+        }
+        const currentCount = coverageCounts.get(readNeighbors) || 0;
+        coverageCounts.set(readNeighbors, currentCount + 1);
+        if (readNeighbors > maxReadNeighbors) maxReadNeighbors = readNeighbors;
+    }
+
+    const histData = [];
+    for (let i = 0; i <= maxReadNeighbors; i++) {
+        histData.push({
+            bin: i,
+            count: coverageCounts.get(i) || 0
+        });
+    }
+
+    const histContainer = panel.append("div").attr("class", "histogram-container");
+    const hNode = histContainer.node();
+    const hWidth = hNode ? hNode.getBoundingClientRect().width : 300;
+    const hHeight = 220;
+    const hMargin = { top: 20, right: 20, bottom: 40, left: 40 };
+    const hInnerWidth = hWidth - hMargin.left - hMargin.right;
+    const hInnerHeight = hHeight - hMargin.top - hMargin.bottom;
+
+    const histSvg = histContainer.append("svg")
+        .attr("width", hWidth)
+        .attr("height", hHeight);
+
+    const hG = histSvg.append("g")
+        .attr("transform", `translate(${hMargin.left},${hMargin.top})`);
+
+    const xHist = d3.scaleBand()
+        .domain(histData.map(d => d.bin))
+        .range([0, hInnerWidth])
+        .padding(0.2);
+
+    const yHist = d3.scaleLinear()
+        .domain([0, d3.max(histData, d => d.count) || 1])
+        .range([hInnerHeight, 0]);
+
+    hG.selectAll(".hist-bar")
+        .data(histData)
+        .join("rect")
+        .attr("class", "hist-bar")
+        .attr("x", d => xHist(d.bin))
+        .attr("y", d => yHist(d.count))
+        .attr("width", xHist.bandwidth())
+        .attr("height", d => hInnerHeight - yHist(d.count));
+
+    // Axes
+    const xAxisG = hG.append("g")
+        .attr("class", "hist-axis")
+        .attr("transform", `translate(0,${hInnerHeight})`)
+        .call(d3.axisBottom(xHist).tickValues(xHist.domain().filter((d, i) => !(i % 2)))); // Filter ticks if many
+
+    const yAxisG = hG.append("g")
+        .attr("class", "hist-axis")
+        .call(d3.axisLeft(yHist).ticks(5));
+
+    // Labels
+    hG.append("text")
+        .attr("class", "hist-label")
+        .attr("x", hInnerWidth / 2)
+        .attr("y", hInnerHeight + 35)
+        .text("# Read Neighbors");
+
+    hG.append("text")
+        .attr("class", "hist-label")
+        .attr("transform", "rotate(-90)")
+        .attr("x", -hInnerHeight / 2)
+        .attr("y", -30)
+        .text("# Unread Papers");
+
+    updateAnalyticsSelection();
 }
