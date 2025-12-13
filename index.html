@@ -12,23 +12,28 @@
 
 <body>
     <div id="app-container">
-        <div class="main-panel">
+        <div class="main-panel" id="cocitation-panel">
+            <div class="panel-label">Co-citation Network</div>
             <svg id="graph-svg" class="graph-container"></svg>
+        </div>
+
+        <div class="main-panel" id="bibliographic-panel">
+            <div class="panel-label">Bibliographic Coupling Network</div>
+            <svg id="bibliographic-svg" class="graph-container"></svg>
         </div>
 
         <div class="side-panel">
             <div class="control-group">
-                
-                <div style="display: flex; justify-content: center;">
-                    
-                    <label class="control-label">Top Papers Per Year:</label>
-                    <div class="control-label" id="row-count" style="margin-left: 5px;">50</div>
-                </div>
-
-                <input type="range" class="slider" id="row-slider" min="5" max="200" step="5" value="50">
-                <div class="slider-labels">
-                    <span>5</span>
-                    <span>200</span>
+                <label class="control-label">Network Type</label>
+                <div class="checkbox-group">
+                    <label class="checkbox-label">
+                        <input type="checkbox" id="cocitation-checkbox" class="checkbox" checked>
+                        <span>Co-citation Network</span>
+                    </label>
+                    <label class="checkbox-label">
+                        <input type="checkbox" id="bibliographic-checkbox" class="checkbox">
+                        <span>Bibliographic Coupling</span>
+                    </label>
                 </div>
             </div>
 
@@ -113,6 +118,10 @@
                 </div>
             </div> -->
         </div>
+
+        <button id="toggle-panels-btn" class="toggle-panels-btn">
+            <span class="toggle-icon">◀</span>
+        </button>
 
         <div class="analytics-panel">
             <div class="analytics-header">Network Analytics</div>
