@@ -1,0 +1,18 @@
+1. Start by explaining these:
+Co-citation: Find research communities (schools of thought) + foundational works + Detect bridges and interdisciplinarity
+bibliographic: works immediately for new papers
+
+2. Approach is more human centered. Considering a researcher that has gathered some papers and read some of them and want to make sense of the current collection.
+
+3. Exploratory part to (...) and some recommendation visualization.
+
+4. Coverage Tracking
+
+
+DATA: How pythons works and csv created -> explain columns
+
+
+
+Visualization: introduce features alongside Insights 
+
+1. 

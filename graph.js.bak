@@ -1689,7 +1689,7 @@ function updateAnalytics(mode = "both") {
 
         // Legend
         const legendContainer = panel.append("div").attr("class", "heatmap-legend");
-        const legendWidth = totalWidth - margin.left - margin.right;
+        const legendWidth = totalWidth - margin.left - margin.right - 10;
         const legendHeight = 10;
         const legendSvg = legendContainer.append("svg")
             .attr("width", totalWidth)
@@ -1819,7 +1819,7 @@ function updateAnalytics(mode = "both") {
 	    stabContainer.append("div")
 	        .style("font-size", "13px")
 	        .style("font-weight", "650")
-	        .style("color", "rgba(226, 232, 240, 0.9)")
+	        .style("color", "#888")
 	        .style("margin-bottom", "8px")
 	        .style("padding-top", "12px")
 	        .style("text-align", "center")
@@ -1827,10 +1827,10 @@ function updateAnalytics(mode = "both") {
 
 	    const stabNode = stabContainer.node();
 	    const measuredStabWidth = stabNode ? stabNode.getBoundingClientRect().width : 0;
-	    const stabWidth = Math.max(320, measuredStabWidth || 0);
+	    const stabWidth = Math.max(280, measuredStabWidth || 0);
 	    const stabHeight = Math.max(250, 100 + (targetPapers.length || 1) * 20);
 	    const stabMargin = { top: 22, right: 18, bottom: 44, left: 44 };
-	    const stabInnerWidth = stabWidth - stabMargin.left - stabMargin.right;
+	    const stabInnerWidth = stabWidth - stabMargin.left - stabMargin.right - 20;
 	    const stabInnerHeight = stabHeight - stabMargin.top - stabMargin.bottom;
 
 	    const stabSvg = stabContainer.append("svg")
