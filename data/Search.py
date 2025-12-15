@@ -4,7 +4,7 @@ import re
 import time
 
 EMAIL = "arsalan.masoudifard@ip-paris.fr"
-INPUT_FILE = "dois.txt"
+INPUT_FILE = "data/dois.txt"
 OUTPUT_FILE = "main_papers.csv"
 
 def extract_dois_from_text(file_path):
@@ -67,8 +67,16 @@ def parse_paper_data(work, original_doi):
         first_inst = authorships[0]['institutions'][0].get('display_name')
 
     topics = work.get('topics', [])
+    primary_topic_obj = topics[0] if topics else {}
+    
+    primary_topic_name = primary_topic_obj.get('display_name')
+    
+    # Extract hierarchy
+    domain_name = get_safe(primary_topic_obj, ['domain', 'display_name'])
+    field_name = get_safe(primary_topic_obj, ['field', 'display_name'])
+    subfield_name = get_safe(primary_topic_obj, ['subfield', 'display_name'])
+
     all_topics = [t.get('display_name') for t in topics]
-    primary_topic = all_topics[0] if all_topics else None
 
     concepts = work.get('concepts', [])
     top_concepts = [c.get('display_name') for c in concepts]
@@ -93,7 +101,10 @@ def parse_paper_data(work, original_doi):
         'first_institution': first_inst or "",
         'venue': get_safe(work, ['primary_location', 'source', 'display_name']) or "",
         'venue_type': get_safe(work, ['primary_location', 'source', 'type']) or "",
-        'primary_topic': primary_topic or "",
+        'primary_topic': primary_topic_name or "",
+        'domain': domain_name or "",
+        'field': field_name or "",
+        'subfield': subfield_name or "",
         'all_topics': "; ".join(filter(None, all_topics)),
         'top_concepts': "; ".join(filter(None, top_concepts[:5])),
         'top_keywords': "; ".join(filter(None, top_keywords[:5])),
@@ -110,22 +121,46 @@ def main():
     dois = extract_dois_from_text(INPUT_FILE)
 
     if not dois:
+        print("No DOIs found.")
         return
 
+    print(f"Fetching data for {len(dois)} DOIs...")
     data = get_openalex_data(dois)
 
     if data:
         df = pd.DataFrame(data)
+        
+        # Preserve 'read' column if exists
+        try:
+            existing_df = pd.read_csv(OUTPUT_FILE)
+            if 'read' in existing_df.columns:
+                print("Preserving 'read' status from existing file...")
+                # Create map from DOI to read status
+                # Normalize DOI just in case, though usually exact match in this script context
+                read_map = dict(zip(existing_df['doi'], existing_df['read']))
+                df['read'] = df['doi'].map(read_map).fillna(0).astype(int, errors='ignore') # Default to 0/empty if new
+            else:
+                df['read'] = 0
+        except FileNotFoundError:
+            df['read'] = 0
+
         cols = [
             'id','doi','title','language','type','publication_date','first_author',
             'all_authors','author_count','first_institution','venue','venue_type',
-            'primary_topic','all_topics','top_concepts','top_keywords','cited_by_count',
+            'primary_topic','domain','field','subfield','all_topics','top_concepts','top_keywords','cited_by_count',
             'referenced_works_count','referenced_works_ids','fwci','counts_by_year',
-            'is_open_access','oa_status'
+            'is_open_access','oa_status','read'
         ]
+        
+        # Ensure all cols exist (e.g. if API failed for all)
+        for c in cols:
+            if c not in df.columns:
+                df[c] = ""
+
         df = df.reindex(columns=cols)
 
         df.to_csv(OUTPUT_FILE, index=False)
+        print(f"Saved {len(df)} papers to {OUTPUT_FILE}")
 
 if __name__ == "__main__":
     main()

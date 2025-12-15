@@ -244,9 +244,16 @@ body {
 
 .node:hover,
 .node.selected {
-    stroke: #667eea;
-    stroke-width: 3px;
+    stroke: #bfc5e2;
+    stroke-width: 2px;
     filter: drop-shadow(0 0 8px rgba(102, 126, 234, 0.6));
+}
+
+.node.selected:hover {
+    stroke: #d0d0d0ff;
+    stroke-width: 2px;
+    filter: drop-shadow(0 0 15px rgba(102, 126, 234, 1));
+    opacity: 1;
 }
 
 .node.dimmed {
@@ -682,4 +689,43 @@ body {
 .highlighted {
   opacity: 1 !important;
   stroke-opacity: 0.75 !important;
+}
+
+.link.hover-connected {
+    stroke: #787575 !important;
+    stroke-width: 0.8px !important;
+    stroke-opacity: 1 !important;
+    filter: drop-shadow(0 0 4px rgba(255, 255, 255, 0.5));
+}
+
+.hovered-candidate {
+    opacity: 0.8 !important;
+    stroke-opacity: 0.6 !important;
+    stroke: #ddd;
+}
+
+/* Specific overrides for Sankey highlighting */
+.sankey-link.dimmed.hovered-candidate {
+    stroke-opacity: 0.6 !important;
+    opacity: 1 !important; /* Reset opacity from .dimmed */
+    stroke: #ddd !important;
+}
+
+.sankey-node.dimmed.hovered-candidate {
+    opacity: 0.9 !important; /* Reset opacity from .dimmed */
+    stroke: #fff !important;
+    stroke-width: 2px !important;
+}
+
+/* Highlight for hovering over an ALREADY selected node in Sankey */
+.sankey-node.selected-hovered {
+    opacity: 1 !important;
+    stroke: #ffffff !important;
+    stroke-width: 3px !important;
+    filter: drop-shadow(0 0 8px rgba(255, 255, 255, 0.8));
+}
+
+.sankey-link.selected-hovered {
+    stroke-opacity: 0.9 !important;
+    stroke: #ffffff !important;
 }

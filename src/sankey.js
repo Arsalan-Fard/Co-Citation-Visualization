@@ -211,6 +211,7 @@ class SankeyVisualizer {
             .selectAll("path")
             .data(graph.links)
             .join("path")
+            .attr("class", "sankey-link") // Add class
             .attr("d", d3.sankeyLinkHorizontal())
             .attr("stroke-width", d => Math.max(1, d.width))
             .attr("stroke", d => {
@@ -227,6 +228,7 @@ ${d.value} connections`);
             .selectAll("rect")
             .data(graph.nodes)
             .join("rect")
+            .attr("class", "sankey-node") // Add class
             .attr("x", d => d.x0)
             .attr("y", d => d.y0)
             .attr("height", d => Math.max(1, d.y1 - d.y0))
@@ -247,21 +249,36 @@ ${d.value} connections`);
                 }
             })
             .on("mouseenter", (event, d) => {
-                if (d.type !== "paper" || selectedNodeIds.size > 0) return;
+                if (d.type !== "paper") return;
                 
-                // Highlight connected links
-                link.classed("highlighted", l => l.paperId === d.paperId);
-                // Highlight this node
-                node.classed("highlighted", n => n.type === "paper" && n.paperId === d.paperId);
+                const hasSelection = selectedNodeIds.size > 0;
+                const isSelected = selectedNodeIds.has(d.paperId);
+
+                if (hasSelection && !isSelected) {
+                    // Case 2: Selection exists, hovering a NEW (unselected) thing
+                    // Apply 'hovered-candidate' which should undim it but be less bright than selected
+                    link.classed("hovered-candidate", l => l.paperId === d.paperId);
+                    node.classed("hovered-candidate", n => n.type === "paper" && n.paperId === d.paperId);
+                } else if (hasSelection && isSelected) {
+                    // Case 3: Selection exists, hovering an ALREADY selected thing
+                    // Make it super bright (level 0 highlight)
+                    link.classed("selected-hovered", l => l.paperId === d.paperId);
+                    node.classed("selected-hovered", n => n.type === "paper" && n.paperId === d.paperId);
+                } else if (!hasSelection) {
+                    // Case 1: No selection, standard highlight (brightest/level 1 equivalent)
+                    link.classed("highlighted", l => l.paperId === d.paperId);
+                    node.classed("highlighted", n => n.type === "paper" && n.paperId === d.paperId);
+                }
             })
             .on("mouseleave", () => {
-                link.classed("highlighted", false);
-                node.classed("highlighted", false);
-                // We don't need to re-apply selection highlighting here because updateGraph rebuilds it, 
-                // but since this is mouseleave, we might want to just restore state.
-                // However, since we re-render on selection change, the 'dimmed' state is handled by updateGraph's logic?
-                // Wait, updateSelection is separate. 
-                // Let's call updateSelection to be safe if we are in a static state.
+                link.classed("highlighted", false)
+                    .classed("hovered-candidate", false)
+                    .classed("selected-hovered", false);
+                node.classed("highlighted", false)
+                    .classed("hovered-candidate", false)
+                    .classed("selected-hovered", false);
+                
+                // Restore selection state
                 this.updateHighlights(selectedNodeIds);
             });
 

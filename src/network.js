@@ -603,6 +603,28 @@ class NetworkVisualizer {
             .attr("cy", d => d.y)
             .on("click", (event, d) => {
                 handleGlobalNodeClick(event, d);
+            })
+            .on("mouseenter", (event, d) => {
+                // Highlight connected links
+                link.classed("hover-connected", l => l.source.id === d.id || l.target.id === d.id)
+                    .style("stroke", l => {
+                        if (l.source.id === d.id || l.target.id === d.id) return "#d0d0d0ff";
+                        return getLinkStyle(l.strength).color;
+                    })
+                    .style("stroke-width", l => {
+                        if (l.source.id === d.id || l.target.id === d.id) return 1.0;
+                        return getLinkStyle(l.strength).width;
+                    })
+                    .style("stroke-opacity", l => {
+                        if (l.source.id === d.id || l.target.id === d.id) return 1;
+                        return null; // Revert to CSS default (or previous inline)
+                    });
+            })
+            .on("mouseleave", (event, d) => {
+                link.classed("hover-connected", false)
+                    .style("stroke", l => getLinkStyle(l.strength).color)
+                    .style("stroke-width", l => getLinkStyle(l.strength).width)
+                    .style("stroke-opacity", null);
             });
 
         const formatDate = d3.timeFormat("%Y-%m-%d");
