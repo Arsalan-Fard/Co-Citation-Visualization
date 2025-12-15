@@ -30,6 +30,11 @@ function computeMetricDomain(metricKey, nodes) {
         .map(def.valueAccessor)
         .filter(v => v != null);
     if (values.length === 0) return null;
+    
+    if (def.scaleType === "categorical") {
+        return Array.from(new Set(values)).sort();
+    }
+
     const extent = d3.extent(values);
     if (!extent || extent[0] == null || extent[1] == null) return null;
     if (def.scaleType === "time") {
@@ -62,6 +67,9 @@ function resolveMetricPreference(preferredKey, nodes) {
 function buildScaleForMetric(metricKey, domain, range) {
     const def = AXIS_METRICS[metricKey];
     if (!def || !domain) return null;
+    if (def.scaleType === "categorical") {
+        return d3.scalePoint().domain(domain).range(range).padding(0.5);
+    }
     if (def.scaleType === "time") {
         return d3.scaleTime().domain(domain).range(range);
     }

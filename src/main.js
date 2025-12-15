@@ -31,6 +31,10 @@ Promise.all([
         const institution = row.first_institution ? row.first_institution.trim() : undefined;
         const venue = row.venue ? row.venue.trim() : undefined;
         const primaryTopic = row.primary_topic ? row.primary_topic.trim() : undefined;
+        const domain = row.domain ? row.domain.trim() : undefined;
+        const field = row.field ? row.field.trim() : undefined;
+        const subfield = row.subfield ? row.subfield.trim() : undefined;
+        const fwci = row.fwci ? +row.fwci : undefined;
         const isRead = row.read ? +row.read === 1 : false;
         const title = row.title ? row.title.trim() : "Untitled";
         
@@ -47,6 +51,10 @@ Promise.all([
             institution,
             venue,
             primaryTopic,
+            domain,
+            field,
+            subfield,
+            fwci,
             isRead,
             isSurvey,
             title,

@@ -32,5 +32,29 @@ const AXIS_METRICS = {
         scaleType: "linear",
         valueAccessor: node => node.weightedDegree ?? null,
         formatTick: axisNumberFormatter
+    },
+    fwci: {
+        label: "FWCI",
+        scaleType: "linear",
+        valueAccessor: node => node.fwci ?? null,
+        formatTick: d => d.toFixed(2)
+    },
+    domain: {
+        label: "Domain",
+        scaleType: "categorical",
+        valueAccessor: node => node.domain || "Unknown",
+        formatTick: d => d
+    },
+    field: {
+        label: "Field",
+        scaleType: "categorical",
+        valueAccessor: node => node.field || "Unknown",
+        formatTick: d => d
+    },
+    subfield: {
+        label: "Subfield",
+        scaleType: "categorical",
+        valueAccessor: node => node.subfield || "Unknown",
+        formatTick: d => d
     }
 };

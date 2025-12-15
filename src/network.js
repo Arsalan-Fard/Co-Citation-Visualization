@@ -290,6 +290,10 @@ class NetworkVisualizer {
                 institution: meta.institution,
                 venue: meta.venue,
                 primaryTopic: meta.primaryTopic,
+                domain: meta.domain,
+                field: meta.field,
+                subfield: meta.subfield,
+                fwci: meta.fwci,
                 isRead: meta.isRead,
                 isSurvey: meta.isSurvey,
                 citationDates: meta.citationDates
