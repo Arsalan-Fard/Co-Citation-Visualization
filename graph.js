@@ -692,6 +692,11 @@ class NetworkVisualizer {
         this.panZoomGroup = this.svg.append("g").attr("class", "panzoom-layer");
         // Removed rotateGroup, append graphGroup directly to panZoomGroup
         this.graphGroup = this.panZoomGroup.append("g").attr("class", "graph-layer");
+        
+        // Persistent Layers
+        this.gridLayer = this.graphGroup.append("g").attr("class", "grid-layer");
+        this.linksLayer = this.graphGroup.append("g").attr("class", "links-layer");
+        this.nodesLayer = this.graphGroup.append("g").attr("class", "nodes-layer");
 
         this.zoom = d3.zoom()
             .filter((event) => !event.ctrlKey)
@@ -1078,41 +1083,52 @@ class NetworkVisualizer {
         const axisWeight = Math.max(0, Math.min(1, positionStability));
         const forceWeight = 1 - axisWeight;
 
-        if (forceWeight > 0) {
-            const linkForceStrength = 1.6 * forceWeight;
-            const chargeStrength = -30 * forceWeight;
-            const collisionStrength = 0.9 * forceWeight;
+        // Store selections for ticked
+        this.currentLinkSelection = link;
+        this.currentNodeSelection = node;
 
+        if (!this.simulation) {
             this.simulation = d3.forceSimulation(nodes)
-                .force("link", d3.forceLink(links)
-                    .id(d => d.id)
-                    .distance(300)
-                    .strength(linkForceStrength))
-                .force("charge", d3.forceManyBody().strength(chargeStrength))
-                .force("collision", d3.forceCollide(d => radiusForNode(d) + 4).strength(collisionStrength))
-                .force("x", d3.forceX(d => d.targetX).strength(0.6 * axisWeight))
-                .force("y", d3.forceY(d => d.targetY).strength(0.6 * axisWeight))
-                .force("center", d3.forceCenter(centerX, centerY).strength(0.5 * forceWeight))
-                .alpha(0.9)
-                .alphaDecay(0.05)
-                .on("tick", () => {
-                    node
-                        .attr("cx", d => d.x)
-                        .attr("cy", d => d.y);
-
-                    link.attr("d", d => {
-                        const dx = d.target.x - d.source.x;
-                        const dy = d.target.y - d.source.y;
-                        const dr = Math.sqrt(dx * dx + dy * dy);
-                        return `M${d.source.x},${d.source.y}A${dr},${dr} 0 0,1 ${d.target.x},${d.target.y}`;
-                    });
-                })
-                .on("end", () => {
-                    this.simulation = null;
-                });
-        } else {
-            this.simulation = null;
+                .force("link", d3.forceLink(links).id(d => d.id).distance(300))
+                .force("charge", d3.forceManyBody())
+                .force("collision", d3.forceCollide())
+                .force("x", d3.forceX(d => d.targetX))
+                .force("y", d3.forceY(d => d.targetY))
+                .force("center", d3.forceCenter(centerX, centerY));
         }
+
+        // Always update forces and restart
+        this.simulation.nodes(nodes);
+        this.simulation.force("link").links(links);
+        this.simulation.force("center", d3.forceCenter(centerX, centerY));
+        
+        const sim = this.simulation;
+        sim.force("link").strength(1.6 * forceWeight);
+        sim.force("charge").strength(-30 * forceWeight);
+        sim.force("collision").radius(d => radiusForNode(d) + 4).strength(0.9 * forceWeight);
+        sim.force("x").x(d => d.targetX).strength(0.6 * axisWeight);
+        sim.force("y").y(d => d.targetY).strength(0.6 * axisWeight);
+        sim.force("center").strength(0.5 * forceWeight);
+        
+        // Update tick handler to use current selections
+        sim.on("tick", () => {
+            if (axisWeight >= 0.98) {
+                 this.currentNodeSelection.attr("cx", d => d.x += (d.targetX - d.x) * 0.3)
+                              .attr("cy", d => d.y += (d.targetY - d.y) * 0.3);
+            } else {
+                 this.currentNodeSelection.attr("cx", d => d.x).attr("cy", d => d.y);
+            }
+            
+            this.currentLinkSelection.attr("d", d => {
+                const sx = d.source.x, sy = d.source.y;
+                const tx = d.target.x, ty = d.target.y;
+                const dx = tx - sx, dy = ty - sy;
+                const dr = Math.sqrt(dx * dx + dy * dy);
+                return `M${sx},${sy}A${dr},${dr} 0 0,1 ${tx},${ty}`;
+            });
+        });
+
+        sim.alpha(0.3).restart();
 
         // this.svg.call(this.zoom.transform, d3.zoomIdentity); // Removed unconditional zoom reset
         
