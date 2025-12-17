@@ -42,7 +42,7 @@ function updateAnalytics(mode = "both") {
     panel.selectAll(".heatmap-container").remove();
     panel.selectAll(".charts-grid").remove();
     panel.selectAll(".heatmap-legend").remove();
-    panel.selectAll(".coverage-chart-container").remove();
+    panel.selectAll(".radial-chart-container").remove();
 
     // --- Heatmap Visualization ---
     if (readPapers.length > 0 && top10.length > 0) {
@@ -212,10 +212,10 @@ function updateAnalytics(mode = "both") {
 
 
 
-    // --- Coverage Gap Analysis (Horizontal Bar Chart) ---
-    const coverageContainer = panel.append("div").attr("class", "coverage-chart-container");
+    // --- Radial Treemap (Sunburst) ---
+    const radialContainer = panel.append("div").attr("class", "radial-chart-container");
     
-    coverageContainer.append("div")
+    radialContainer.append("div")
         .style("font-size", "14px")
         .style("font-weight", "600")
         .style("color", "#888")
@@ -224,92 +224,138 @@ function updateAnalytics(mode = "both") {
         .style("margin-bottom", "8px")
         .style("padding-top", "12px")
         .style("text-align", "center")
-        .text("Coverage Gap Analysis");
+        .text("Paper Hierarchy");
 
-    const fieldStats = new Map();
-    paperMeta.forEach(meta => {
-        const f = meta.field || "Unknown";
-        if (!fieldStats.has(f)) fieldStats.set(f, { name: f, total: 0, read: 0 });
-        const stat = fieldStats.get(f);
-        stat.total++;
-        if (meta.isRead) stat.read++;
+    const rootData = { name: "All", children: [] };
+    const domains = new Map();
+
+    paperMeta.forEach((meta, id) => {
+        const domain = meta.domain || "Unknown";
+        const field = meta.field || "Unknown";
+        const subfield = meta.subfield || "Unknown";
+        
+        if (!domains.has(domain)) domains.set(domain, new Map());
+        const fields = domains.get(domain);
+        
+        if (!fields.has(field)) fields.set(field, new Map());
+        const subfields = fields.get(field);
+        
+        if (!subfields.has(subfield)) subfields.set(subfield, []);
+        subfields.get(subfield).push(id);
     });
 
-    const coverageData = Array.from(fieldStats.values())
-        .sort((a, b) => (a.read / a.total) - (b.read / b.total)); // Sort by least covered first
+    domains.forEach((fields, domainName) => {
+        const domainNode = { name: domainName, children: [] };
+        fields.forEach((subfields, fieldName) => {
+            const fieldNode = { name: fieldName, children: [] };
+            subfields.forEach((paperIds, subfieldName) => {
+                const subfieldNode = { name: subfieldName, value: paperIds.length };
+                fieldNode.children.push(subfieldNode);
+            });
+            domainNode.children.push(fieldNode);
+        });
+        rootData.children.push(domainNode);
+    });
 
-    const rowHeight = 35;
-    const covHeight = coverageData.length * rowHeight + 30;
-    const covWidth = 280;
-    const covMargin = { top: 20, right: 40, bottom: 10, left: 90 }; // Left for labels
-    
-    const covSvg = coverageContainer.append("svg")
-        .attr("width", covWidth)
-        .attr("height", covHeight);
+    const rWidth = 280;
+    const rHeight = 280;
+    const radius = rWidth / 2;
+    const holeRadius = 25; 
 
-    const covG = covSvg.append("g")
-        .attr("transform", `translate(${covMargin.left},${covMargin.top})`);
+    const color = d3.scaleOrdinal(d3.schemeCategory10);
+    const format = d3.format(",d");
 
-    const xCov = d3.scaleLinear()
-        .domain([0, d3.max(coverageData, d => d.total) || 1])
-        .range([0, covWidth - covMargin.left - covMargin.right]);
+    const radialSvg = radialContainer.append("svg")
+        .attr("width", rWidth)
+        .attr("height", rHeight)
+        .style("margin", "0 auto")
+        .style("display", "block")
+        .append("g")
+        .attr("transform", `translate(${rWidth / 2},${rHeight / 2})`);
 
-    const yCov = d3.scaleBand()
-        .domain(coverageData.map(d => d.name))
-        .range([0, coverageData.length * rowHeight])
-        .padding(0.4);
+    const partition = d3.partition(); // Normalized [0,1]
 
-    // Axis
-    covG.append("g")
-        .call(d3.axisLeft(yCov).tickSize(0))
-        .selectAll("text")
-        .style("fill", "#888")
-        .style("font-size", "10px")
-        .style("text-anchor", "end")
-        .text(d => d.length > 15 ? d.substring(0, 13) + ".." : d)
+    const root = d3.hierarchy(rootData)
+        .sum(d => d.value)
+        .sort((a, b) => b.value - a.value);
+
+    partition(root);
+
+    // Scales for zooming
+    const x = d3.scaleLinear().range([0, 2 * Math.PI]);
+    // Set y domain start to root.y1 so the first ring starts at holeRadius
+    const y = d3.scaleSqrt().domain([root.y1, 1]).range([holeRadius, radius]);
+
+    const arc = d3.arc()
+        .startAngle(d => Math.max(0, Math.min(2 * Math.PI, x(d.x0))))
+        .endAngle(d => Math.max(0, Math.min(2 * Math.PI, x(d.x1))))
+        .padAngle(d => Math.min((d.x1 - d.x0) / 2, 0.005))
+        .padRadius(radius * 1.5)
+        .innerRadius(d => Math.max(0, y(d.y0)))
+        .outerRadius(d => Math.max(0, y(d.y1) - 1));
+
+    // Render paths
+    radialSvg.selectAll("path")
+        .data(root.descendants().filter(d => d.depth)) // Filter out root
+        .join("path")
+        .attr("d", arc)
+        .style("fill", d => {
+             let domain = d;
+             while (domain.depth > 1) domain = domain.parent;
+             const baseColor = color(domain.data.name);
+             
+             // Mix with white based on depth to make it "brighter" (more pastel/whitish)
+             // Depth 1 (Domain): 0% white (pure base color)
+             // Depth 2 (Field): 30% white
+             // Depth 3 (Subfield): 60% white
+             const whiteFactor = (d.depth - 1) * 0.3;
+             return d3.interpolateRgb(baseColor, "#ffffff")(Math.min(whiteFactor, 0.8));
+        })
+        .style("cursor", "pointer")
+        .style("opacity", 1)
+        .on("click", clicked)
         .append("title")
-        .text(d => d);
+        .text(d => `${d.ancestors().map(d => d.data.name).reverse().join(" -> ")}\n${format(d.value)} papers`);
+
+    let focus = root;
+
+    // Center Clickable Area (to zoom out)
+    const centerGroup = radialSvg.append("g")
+        .style("cursor", "pointer")
+        .on("click", (event) => {
+             if (focus !== root && focus.parent) {
+                 clicked(event, focus.parent);
+             }
+        });
+
+    centerGroup.append("circle")
+        .attr("r", holeRadius)
+        .style("fill", "transparent");
+
+    const centerText = centerGroup.append("text")
+        .attr("pointer-events", "none")
+        .attr("text-anchor", "middle")
+        .attr("dy", "0.3em")
+        .style("user-select", "none")
+        .style("font-size", "10px")
+        .style("font-weight", "bold")
+        .style("fill", "#555")
+        .text("All"); 
+
+    function clicked(event, p) {
+        focus = p;
+        radialSvg.transition().duration(750).tween("scale", () => {
+            const xd = d3.interpolate(x.domain(), [p.x0, p.x1]);
+            const targetY0 = p === root ? root.y1 : p.y0;
+            const yd = d3.interpolate(y.domain(), [targetY0, 1]);
+            const yr = d3.interpolate(y.range(), [holeRadius, radius]); 
+            return t => { x.domain(xd(t)); y.domain(yd(t)).range(yr(t)); };
+        })
+        .selectAll("path")
+        .attrTween("d", d => () => arc(d));
         
-    covG.selectAll(".domain, line").remove(); // Clean axis
-
-    const barGroups = covG.selectAll(".cov-row")
-        .data(coverageData)
-        .join("g")
-        .attr("class", "cov-row")
-        .attr("transform", d => `translate(0, ${yCov(d.name)})`);
-
-    // Total Bar (Background)
-    barGroups.append("rect")
-        .attr("height", yCov.bandwidth())
-        .attr("width", d => xCov(d.total))
-        .attr("fill", "#333")
-        .attr("rx", 2);
-
-    // Read Bar
-    barGroups.append("rect")
-        .attr("height", yCov.bandwidth())
-        .attr("width", d => xCov(d.read))
-        .attr("fill", "#4A90E2")
-        .attr("rx", 2);
-
-    // Projected Bar (Ghost) - Initialized to 0
-    barGroups.append("rect")
-        .attr("class", "projected-bar")
-        .attr("height", yCov.bandwidth())
-        .attr("x", d => xCov(d.read))
-        .attr("width", 0)
-        .attr("fill", "#4cd964") // Greenish for "Gain"
-        .attr("opacity", 0.6)
-        .attr("rx", 2);
-
-    // Text Label (e.g. "5/20")
-    barGroups.append("text")
-        .attr("class", "cov-label")
-        .attr("x", d => xCov(d.total) + 5)
-        .attr("y", yCov.bandwidth() / 2 + 3)
-        .text(d => `${d.read}/${d.total}`)
-        .style("font-size", "9px")
-        .style("fill", "#666");
+        centerText.text(p.data.name.length > 12 ? p.data.name.substring(0, 10) + ".." : p.data.name);
+    }
 
     updateAnalyticsSelection();
 }
@@ -329,58 +375,4 @@ function updateAnalyticsSelection() {
             });
     }
 
-    // --- Update Coverage Chart Projection ---
-    // Recalculate basic stats to rebuild scale (lightweight enough)
-    const fieldStats = new Map();
-    let maxTotal = 0;
-    paperMeta.forEach(meta => {
-        const f = meta.field || "Unknown";
-        if (!fieldStats.has(f)) fieldStats.set(f, { total: 0 });
-        fieldStats.get(f).total++;
-    });
-    fieldStats.forEach(s => { if(s.total > maxTotal) maxTotal = s.total; });
-
-    const covWidth = 280;
-    const covMargin = { top: 20, right: 40, bottom: 10, left: 90 };
-    const xCov = d3.scaleLinear()
-        .domain([0, maxTotal || 1])
-        .range([0, covWidth - covMargin.left - covMargin.right]);
-
-    const fieldProjections = new Map();
-    if (selectedNodeIds.size > 0) {
-        selectedNodeIds.forEach(id => {
-            const meta = paperMeta.get(id);
-            if (meta && !meta.isRead) {
-                const f = meta.field || "Unknown";
-                fieldProjections.set(f, (fieldProjections.get(f) || 0) + 1);
-            }
-        });
-    }
-
-    d3.selectAll(".projected-bar")
-        .transition().duration(300)
-        .attr("width", function() {
-            // Get the data bound to the parent group
-            const d = d3.select(this.parentNode).datum(); 
-            const projectedCount = fieldProjections.get(d.name) || 0;
-            return xCov(projectedCount);
-        });
-
-    d3.selectAll(".cov-label")
-        .text(function() {
-            const d = d3.select(this.parentNode).datum();
-            const projectedCount = fieldProjections.get(d.name) || 0;
-            const base = `${d.read}/${d.total}`;
-            return projectedCount > 0 ? `${base} (+${projectedCount})` : base;
-        })
-        .style("fill", function() {
-            const d = d3.select(this.parentNode).datum();
-            const projectedCount = fieldProjections.get(d.name) || 0;
-            return projectedCount > 0 ? "#4cd964" : "#666";
-        })
-        .style("font-weight", function() {
-            const d = d3.select(this.parentNode).datum();
-            const projectedCount = fieldProjections.get(d.name) || 0;
-            return projectedCount > 0 ? "bold" : "normal";
-        });
 }
