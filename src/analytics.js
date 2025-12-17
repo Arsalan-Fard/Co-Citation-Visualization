@@ -42,7 +42,7 @@ function updateAnalytics(mode = "both") {
     panel.selectAll(".heatmap-container").remove();
     panel.selectAll(".charts-grid").remove();
     panel.selectAll(".heatmap-legend").remove();
-    panel.selectAll(".stability-chart-container").remove();
+    panel.selectAll(".coverage-chart-container").remove();
 
     // --- Heatmap Visualization ---
     if (readPapers.length > 0 && top10.length > 0) {
@@ -68,6 +68,7 @@ function updateAnalytics(mode = "both") {
             .attr("class", "heatmap-scroll-area")
             .style("flex-grow", "1")
             .style("overflow-y", "auto")
+            .style("max-height", "250px") // Limit height to reduce visual footprint
             .style("height", "100%"); // Ensure it fills container height if defined in CSS
 
         const matrix = [];
@@ -101,8 +102,9 @@ function updateAnalytics(mode = "both") {
         const totalWidth = containerNode ? (containerNode.getBoundingClientRect().width - 25) : 280;
         const margin = { top: 25, right: 0, bottom: 0, left: 0 }; 
         
-        const cellSize = Math.floor((totalWidth - margin.left - margin.right) / 10);
-        const height = matrix.length * cellSize + margin.top + margin.bottom;
+        const cellWidth = Math.floor((totalWidth - margin.left - margin.right) / 10);
+        const cellHeight = cellWidth; // Revert to square cells
+        const height = matrix.length * cellHeight + margin.top + margin.bottom;
 
         const svg = scrollDiv.append("svg")
             .attr("width", totalWidth)
@@ -137,11 +139,11 @@ function updateAnalytics(mode = "both") {
                 .data(row.values)
                 .join("rect")
                 .attr("class", d => `heatmap-cell row-read-${d.readId}`)
-                .attr("x", (d, j) => j * cellSize)
-                .attr("y", i * cellSize)
-                .attr("width", cellSize - 1)
-                .attr("height", cellSize - 1)
-                .attr("fill", d => d.value === 0 ? "#333" : colorScale(Math.log10(d.value + 1)))
+                .attr("x", (d, j) => j * cellWidth)
+                .attr("y", i * cellHeight)
+                .attr("width", cellWidth - 1)
+                .attr("height", cellHeight - 1)
+                .attr("fill", d => d.value === 0 ? "#ffffff" : colorScale(Math.log10(d.value + 1)))
                 .on("mouseover", (event, d) => {
                     tooltip.transition().duration(200).style("opacity", 1);
                     tooltip.html(`
@@ -208,308 +210,106 @@ function updateAnalytics(mode = "both") {
             .text(maxVal.toFixed(1) + " (log scale)");
     }
 
-    // --- Bayesian Topic Confidence (Violin Plot) ---
-    const targetPapers = [];
-    let chartTitle = "Relevance Confidence (Selected Papers)";
 
-    if (selectedNodeIds.size > 0) {
-        unreadPapers.forEach(p => {
-            if (selectedNodeIds.has(p.id)) {
-                targetPapers.push(p);
-            }
-        });
-    }
 
-    // 1. Train Topic Models (Beta Distributions)
-    const topicStats = new Map(); // Map<topic, {alpha: num, beta: num}>
+    // --- Coverage Gap Analysis (Horizontal Bar Chart) ---
+    const coverageContainer = panel.append("div").attr("class", "coverage-chart-container");
     
-    // Priors: weak prior (alpha=1, beta=1) represents uniform uncertainty
-    // If a topic is very common in the corpus but rarely read, Beta increases (low relevance).
-    // If a topic is read often, Alpha increases (high relevance).
-    
-    // First, scan corpus to establish vocabulary and "background" frequency
+    coverageContainer.append("div")
+        .style("font-size", "14px")
+        .style("font-weight", "600")
+        .style("color", "#888")
+        .style("text-transform", "uppercase")
+        .style("letter-spacing", "1px")
+        .style("margin-bottom", "8px")
+        .style("padding-top", "12px")
+        .style("text-align", "center")
+        .text("Coverage Gap Analysis");
+
+    const fieldStats = new Map();
     paperMeta.forEach(meta => {
-        const topics = meta.allTopics || [];
-        topics.forEach(t => {
-            if (!topicStats.has(t)) topicStats.set(t, { alpha: 0.5, beta: 0.5, total: 0 }); // weak prior
-            topicStats.get(t).total++;
-        });
+        const f = meta.field || "Unknown";
+        if (!fieldStats.has(f)) fieldStats.set(f, { name: f, total: 0, read: 0 });
+        const stat = fieldStats.get(f);
+        stat.total++;
+        if (meta.isRead) stat.read++;
     });
 
-    // Update with Read/Unread evidence
-    paperMeta.forEach(meta => {
-        const topics = meta.allTopics || [];
-        topics.forEach(t => {
-            const stat = topicStats.get(t);
-            if (meta.isRead) {
-                stat.alpha += 1.0; // Positive evidence
-            } else {
-                // For unread papers, it's weak negative evidence (we haven't chosen it YET)
-                // But mostly it just adds to the denominator of "exposure" without "conversion"
-                stat.beta += 0.1; 
-            }
-        });
-    });
+    const coverageData = Array.from(fieldStats.values())
+        .sort((a, b) => (a.read / a.total) - (b.read / b.total)); // Sort by least covered first
 
-    // 2. Sample Distributions for Target Papers
-    // We simulate "Probable Relevance Scores"
-    const boxData = [];
-    const nSamples = 50;
+    const rowHeight = 35;
+    const covHeight = coverageData.length * rowHeight + 30;
+    const covWidth = 280;
+    const covMargin = { top: 20, right: 40, bottom: 10, left: 90 }; // Left for labels
+    
+    const covSvg = coverageContainer.append("svg")
+        .attr("width", covWidth)
+        .attr("height", covHeight);
 
-    // Helper: Box-Muller transform for Normal sample
-    const randn_bm = () => {
-        let u = 0, v = 0;
-        while(u === 0) u = Math.random(); 
-        while(v === 0) v = Math.random();
-        return Math.sqrt( -2.0 * Math.log( u ) ) * Math.cos( 2.0 * Math.PI * v );
-    };
+    const covG = covSvg.append("g")
+        .attr("transform", `translate(${covMargin.left},${covMargin.top})`);
 
-    targetPapers.forEach(p => {
-        const meta = paperMeta.get(p.id);
-        const topics = meta.allTopics || [];
+    const xCov = d3.scaleLinear()
+        .domain([0, d3.max(coverageData, d => d.total) || 1])
+        .range([0, covWidth - covMargin.left - covMargin.right]);
+
+    const yCov = d3.scaleBand()
+        .domain(coverageData.map(d => d.name))
+        .range([0, coverageData.length * rowHeight])
+        .padding(0.4);
+
+    // Axis
+    covG.append("g")
+        .call(d3.axisLeft(yCov).tickSize(0))
+        .selectAll("text")
+        .style("fill", "#888")
+        .style("font-size", "10px")
+        .style("text-anchor", "end")
+        .text(d => d.length > 15 ? d.substring(0, 13) + ".." : d)
+        .append("title")
+        .text(d => d);
         
-        if (topics.length === 0) return; // Skip if no topic data
+    covG.selectAll(".domain, line").remove(); // Clean axis
 
-        const samples = [];
-        
-        for (let i = 0; i < nSamples; i++) {
-            let sumProb = 0;
-            
-            topics.forEach(t => {
-                const stat = topicStats.get(t) || { alpha: 1, beta: 1 };
-                // Mean of Beta
-                const mean = stat.alpha / (stat.alpha + stat.beta);
-                // Variance of Beta
-                const variance = (stat.alpha * stat.beta) / (Math.pow(stat.alpha + stat.beta, 2) * (stat.alpha + stat.beta + 1));
-                const std = Math.sqrt(variance);
+    const barGroups = covG.selectAll(".cov-row")
+        .data(coverageData)
+        .join("g")
+        .attr("class", "cov-row")
+        .attr("transform", d => `translate(0, ${yCov(d.name)})`);
 
-                // Sample from N(mean, std) as approximation
-                // Clamp between 0 and 1
-                let sample = mean + randn_bm() * std;
-                sample = Math.max(0, Math.min(1, sample));
-                
-                sumProb += sample;
-            });
-            
-            // Paper score is average of its topic scores
-            samples.push(sumProb / topics.length);
-        }
+    // Total Bar (Background)
+    barGroups.append("rect")
+        .attr("height", yCov.bandwidth())
+        .attr("width", d => xCov(d.total))
+        .attr("fill", "#333")
+        .attr("rx", 2);
 
-        samples.sort((a, b) => a - b);
+    // Read Bar
+    barGroups.append("rect")
+        .attr("height", yCov.bandwidth())
+        .attr("width", d => xCov(d.read))
+        .attr("fill", "#4A90E2")
+        .attr("rx", 2);
 
-        boxData.push({
-            id: p.id,
-            title: p.title,
-            min: samples[0],
-            q1: d3.quantile(samples, 0.25),
-            median: d3.quantile(samples, 0.5),
-            q3: d3.quantile(samples, 0.75),
-            max: samples[samples.length - 1],
-            samples: samples
-        });
-    });
+    // Projected Bar (Ghost) - Initialized to 0
+    barGroups.append("rect")
+        .attr("class", "projected-bar")
+        .attr("height", yCov.bandwidth())
+        .attr("x", d => xCov(d.read))
+        .attr("width", 0)
+        .attr("fill", "#4cd964") // Greenish for "Gain"
+        .attr("opacity", 0.6)
+        .attr("rx", 2);
 
-    // --- Bayesian Topic Confidence (Violin Plot) ---
-    // Always render container
-    const stabContainer = panel.append("div").attr("class", "stability-chart-container");
-    
-    if (boxData.length > 0) {
-        stabContainer.append("div")
-            .style("font-size", "13px")
-            .style("font-weight", "650")
-            .style("color", "#888")
-            .style("margin-bottom", "8px")
-            .style("padding-top", "12px")
-            .style("text-align", "center")
-            .text(chartTitle);
-
-        const stabNode = stabContainer.node();
-        const measuredStabWidth = stabNode ? stabNode.getBoundingClientRect().width : 0;
-        const stabWidth = Math.max(280, measuredStabWidth || 0);
-        const stabHeight = Math.max(250, 100 + (boxData.length || 1) * 35); // slightly taller rows
-        const stabMargin = { top: 22, right: 18, bottom: 44, left: 44 };
-        const stabInnerWidth = stabWidth - stabMargin.left - stabMargin.right - 20;
-        const stabInnerHeight = stabHeight - stabMargin.top - stabMargin.bottom;
-
-        const stabSvg = stabContainer.append("svg")
-            .attr("width", stabWidth)
-            .attr("height", stabHeight);
-
-        const gStab = stabSvg.append("g")
-            .attr("transform", `translate(${stabMargin.left},${stabMargin.top})`);
-
-        const yStab = d3.scaleBand()
-            .domain(boxData.map((d, i) => i))
-            .range([0, stabInnerHeight])
-            .padding(0.2);
-
-        // X Axis is now Relevance Probability (0 to 1)
-        const xStab = d3.scaleLinear()
-            .domain([0, 1])
-            .range([0, stabInnerWidth]);
-
-        const stabGrid = gStab.append("g")
-            .attr("class", "grid-lines")
-            .attr("transform", `translate(0,${stabInnerHeight})`)
-            .call(d3.axisBottom(xStab).ticks(5).tickSize(-stabInnerHeight).tickFormat(""));
-        stabGrid.selectAll("line")
-            .attr("stroke", "#94a3b8")
-            .attr("stroke-opacity", 0.14);
-        stabGrid.selectAll("path").remove();
-
-        // X Axis Label
-        const stabXAxis = gStab.append("g")
-            .attr("transform", `translate(0,${stabInnerHeight})`)
-            .call(d3.axisBottom(xStab).ticks(5));
-        stabXAxis.selectAll("text")
-            .attr("fill", "#888")
-            .style("font-size", "10px");
-        stabXAxis.selectAll("path, line")
-            .attr("stroke", "#444");
-    
-        gStab.append("text")
-            .attr("x", stabInnerWidth / 2)
-            .attr("y", stabInnerHeight + 34)
-            .attr("fill", "#888")
-            .style("text-anchor", "middle")
-            .style("font-size", "10px")
-            .text("Predicted Relevance Probability");
-
-        const stabYAxis = gStab.append("g")
-            .call(d3.axisLeft(yStab).tickFormat(i => i + 1));
-        stabYAxis.selectAll("text")
-            .attr("fill", "#888")
-            .style("font-size", "10px");
-        stabYAxis.selectAll("path, line")
-            .attr("stroke", "#444");
-    
-        // Violin Density Logic
-        const kernelEpanechnikov = (bandwidth) => (v) => {
-            const x = v / bandwidth;
-            return Math.abs(x) <= 1 ? (0.75 * (1 - x * x)) / bandwidth : 0;
-        };
-        const kernelDensityEstimator = (kernel, xValues) => (sample) =>
-            xValues.map(x => [x, d3.mean(sample, s => kernel(x - s)) || 0]);
-    
-        const violinX = d3.range(0, 1.05, 0.05); // Sample points 0.0 to 1.0
-        const kde = kernelDensityEstimator(kernelEpanechnikov(0.1), violinX);
-        
-        boxData.forEach(d => {
-            d.density = d.samples.length ? kde(d.samples) : violinX.map(x => [x, 0]);
-        });
-        
-        const maxDensity = d3.max(boxData, d => d3.max(d.density, v => v[1])) || 1;
-        const violinScale = d3.scaleLinear()
-            .domain([0, maxDensity])
-            .range([0, yStab.bandwidth() / 2]);
-            
-        const violinArea = d3.area()
-            .curve(d3.curveCatmullRom.alpha(0.6))
-            .x(d => xStab(d[0]))
-            .y0(d => -violinScale(d[1]))
-            .y1(d => violinScale(d[1]));
-
-        const groups = gStab.selectAll(".stab-row")
-            .data(boxData)
-            .join("g")
-            .attr("class", "stab-row")
-            .attr("transform", (d, i) => `translate(0, ${yStab(i) + yStab.bandwidth()/2})`);
-    
-        // Violin Shape
-        groups.append("path")
-            .attr("d", d => violinArea(d.density))
-            .attr("fill", "#4a90e2")
-            .attr("opacity", 0.3)
-            .attr("stroke", "#4a90e2")
-            .attr("stroke-opacity", 0.6)
-            .attr("stroke-width", 1);
-    
-        const whiskerColor = "#94a3b8";
-        const boxStroke = "#e2e8f0";
-        const boxHeight = Math.max(8, yStab.bandwidth() * 0.4);
-        const capSize = Math.max(6, yStab.bandwidth() * 0.3);
-    
-        // Whiskers
-        groups.append("line")
-            .attr("x1", d => xStab(d.min))
-            .attr("x2", d => xStab(d.max))
-            .attr("stroke", whiskerColor)
-            .attr("stroke-width", 1)
-            .attr("stroke-opacity", 0.9);
-        groups.append("line")
-            .attr("x1", d => xStab(d.min))
-            .attr("x2", d => xStab(d.min))
-            .attr("y1", -capSize / 2)
-            .attr("y2", capSize / 2)
-            .attr("stroke", whiskerColor)
-            .attr("stroke-width", 1)
-            .attr("stroke-opacity", 0.9);
-        groups.append("line")
-            .attr("x1", d => xStab(d.max))
-            .attr("x2", d => xStab(d.max))
-            .attr("y1", -capSize / 2)
-            .attr("y2", capSize / 2)
-            .attr("stroke", whiskerColor)
-            .attr("stroke-width", 1)
-            .attr("stroke-opacity", 0.9);
-    
-        // Box (IQR)
-        groups.append("rect")
-            .attr("x", d => Math.min(xStab(d.q1), xStab(d.q3)))
-            .attr("y", -boxHeight / 2)
-            .attr("width", d => Math.max(2, Math.abs(xStab(d.q3) - xStab(d.q1))))
-            .attr("height", boxHeight)
-            .attr("fill", "#2b2b2b") // Dark fill for contrast against blue violin
-            .attr("stroke", boxStroke)
-            .attr("stroke-opacity", 0.9)
-            .attr("stroke-width", 1);
-    
-        // Median Line
-        groups.append("line")
-            .attr("x1", d => xStab(d.median))
-            .attr("x2", d => xStab(d.median))
-            .attr("y1", -boxHeight / 2)
-            .attr("y2", boxHeight / 2)
-            .attr("stroke", "#fff")
-            .attr("stroke-opacity", 1)
-            .attr("stroke-width", 2);
-
-        // Tooltip interaction
-        groups.append("rect") // Invisible overlay
-            .attr("x", 0)
-            .attr("y", -yStab.bandwidth()/2)
-            .attr("width", stabInnerWidth)
-            .attr("height", yStab.bandwidth())
-            .attr("fill", "transparent")
-            .style("cursor", "help")
-            .on("mouseover", (event, d) => {
-                const tooltip = d3.select(".heatmap-tooltip");
-                tooltip.transition().duration(200).style("opacity", 1);
-                tooltip.html(`
-                    <div><b>${d.title}</b></div>
-                    <div style="margin-top:4px;">Relevance: ${(d.median * 100).toFixed(1)}%</div>
-                    <div>Confidence: ${((1 - (d.q3 - d.q1)) * 100).toFixed(0)}%</div>
-                `)
-                .style("left", (event.pageX + 10) + "px")
-                .style("top", (event.pageY - 28) + "px");
-            })
-            .on("mouseout", () => {
-                 d3.select(".heatmap-tooltip").transition().duration(500).style("opacity", 0);
-            });
-    } else {
-        // Empty state
-        stabContainer.style("min-height", "250px")
-            .style("display", "flex")
-            .style("align-items", "center")
-            .style("justify-content", "center")
-            .style("border-top", "1px solid #333");
-            
-        stabContainer.append("div")
-            .style("color", "#666")
-            .style("font-size", "13px")
-            .style("font-style", "italic")
-            .text("Select unread papers to see Bayesian relevance confidence analysis");
-    }
+    // Text Label (e.g. "5/20")
+    barGroups.append("text")
+        .attr("class", "cov-label")
+        .attr("x", d => xCov(d.total) + 5)
+        .attr("y", yCov.bandwidth() / 2 + 3)
+        .text(d => `${d.read}/${d.total}`)
+        .style("font-size", "9px")
+        .style("fill", "#666");
 
     updateAnalyticsSelection();
 }
@@ -528,4 +328,59 @@ function updateAnalyticsSelection() {
                 return selectedNodeIds.has(d.unreadId) || selectedNodeIds.has(d.readId);
             });
     }
+
+    // --- Update Coverage Chart Projection ---
+    // Recalculate basic stats to rebuild scale (lightweight enough)
+    const fieldStats = new Map();
+    let maxTotal = 0;
+    paperMeta.forEach(meta => {
+        const f = meta.field || "Unknown";
+        if (!fieldStats.has(f)) fieldStats.set(f, { total: 0 });
+        fieldStats.get(f).total++;
+    });
+    fieldStats.forEach(s => { if(s.total > maxTotal) maxTotal = s.total; });
+
+    const covWidth = 280;
+    const covMargin = { top: 20, right: 40, bottom: 10, left: 90 };
+    const xCov = d3.scaleLinear()
+        .domain([0, maxTotal || 1])
+        .range([0, covWidth - covMargin.left - covMargin.right]);
+
+    const fieldProjections = new Map();
+    if (selectedNodeIds.size > 0) {
+        selectedNodeIds.forEach(id => {
+            const meta = paperMeta.get(id);
+            if (meta && !meta.isRead) {
+                const f = meta.field || "Unknown";
+                fieldProjections.set(f, (fieldProjections.get(f) || 0) + 1);
+            }
+        });
+    }
+
+    d3.selectAll(".projected-bar")
+        .transition().duration(300)
+        .attr("width", function() {
+            // Get the data bound to the parent group
+            const d = d3.select(this.parentNode).datum(); 
+            const projectedCount = fieldProjections.get(d.name) || 0;
+            return xCov(projectedCount);
+        });
+
+    d3.selectAll(".cov-label")
+        .text(function() {
+            const d = d3.select(this.parentNode).datum();
+            const projectedCount = fieldProjections.get(d.name) || 0;
+            const base = `${d.read}/${d.total}`;
+            return projectedCount > 0 ? `${base} (+${projectedCount})` : base;
+        })
+        .style("fill", function() {
+            const d = d3.select(this.parentNode).datum();
+            const projectedCount = fieldProjections.get(d.name) || 0;
+            return projectedCount > 0 ? "#4cd964" : "#666";
+        })
+        .style("font-weight", function() {
+            const d = d3.select(this.parentNode).datum();
+            const projectedCount = fieldProjections.get(d.name) || 0;
+            return projectedCount > 0 ? "bold" : "normal";
+        });
 }

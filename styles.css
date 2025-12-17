@@ -581,15 +581,7 @@ body {
     justify-content: center;
 }
 
-.stability-chart-container {
-    width: 100%;
-    margin-bottom: 10px;
-}
 
-.stability-chart-container svg {
-    width: 100%;
-    display: block;
-}
 
 
 .layout-controls {
