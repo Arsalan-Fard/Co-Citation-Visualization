@@ -547,8 +547,8 @@ body {
 
 .heatmap-cell.highlighted {
     opacity: 1 !important;
-    stroke: #fff;
-    stroke-width: 2px;
+    stroke: #fff !important;
+    stroke-width: 2px !important;
 }
 
 .heatmap-container.has-selection .heatmap-cell:not(.highlighted) {
@@ -773,4 +773,12 @@ body {
 .menu-item:hover {
     background: #3b82f6;
     color: #fff;
+}
+
+.heatmap-scroll-area {
+    scrollbar-width: none;
+    -ms-overflow-style: none;
+}
+.heatmap-scroll-area::-webkit-scrollbar {
+    display: none;
 }

@@ -42,6 +42,9 @@ Promise.all([
         const titleLower = title.toLowerCase();
         const isSurvey = type.includes("review") || type.includes("survey") || titleLower.includes("survey") || titleLower.includes("review");
 
+        const topKeywords = row.top_keywords ? row.top_keywords.split(';').map(s => s.trim()).filter(s => s) : [];
+        const allTopics = row.all_topics ? row.all_topics.split(';').map(s => s.trim()).filter(s => s) : [];
+
         paperMeta.set(row.id, {
             year: yr,
             cited,
@@ -57,7 +60,9 @@ Promise.all([
             isRead,
             isSurvey,
             title,
-            citationDates: citationTimelines.get(row.id) || []
+            citationDates: citationTimelines.get(row.id) || [],
+            topKeywords,
+            allTopics
         });
     });
 
