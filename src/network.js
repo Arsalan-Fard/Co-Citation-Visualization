@@ -419,7 +419,78 @@ class NetworkVisualizer {
             const metric = nodeMetrics.get(node.id) || { degree: 0, weightedDegree: 0 };
             node.degree = metric.degree;
             node.weightedDegree = metric.weightedDegree;
+            node.centrality = node.degree; // Alias for axis
         });
+
+        // --- Betweenness Centrality Calculation (Brandes) ---
+        // Only run if nodes < 2000 to prevent browser freeze (simple heuristic)
+        if (nodes.length < 2000) {
+            const adj = new Map();
+            nodes.forEach(n => adj.set(n.id, []));
+            links.forEach(l => {
+                // Ensure IDs exist in map (links filtered by node existence already, but safe check)
+                if(adj.has(l.sourceId)) adj.get(l.sourceId).push(l.targetId);
+                if(adj.has(l.targetId)) adj.get(l.targetId).push(l.sourceId);
+            });
+
+            const CB = new Map();
+            nodes.forEach(n => CB.set(n.id, 0));
+
+            nodes.forEach(sNode => {
+                const s = sNode.id;
+                const S = [];
+                const P = new Map();
+                const sigma = new Map();
+                const d = new Map();
+                
+                // Init
+                nodes.forEach(v => {
+                    P.set(v.id, []);
+                    sigma.set(v.id, 0);
+                    d.set(v.id, -1);
+                });
+
+                sigma.set(s, 1);
+                d.set(s, 0);
+                const Q = [s];
+
+                while (Q.length > 0) {
+                    const v = Q.shift();
+                    S.push(v);
+                    const neighbors = adj.get(v) || [];
+                    for (const w of neighbors) {
+                        if (d.get(w) < 0) {
+                            Q.push(w);
+                            d.set(w, d.get(v) + 1);
+                        }
+                        if (d.get(w) === d.get(v) + 1) {
+                            sigma.set(w, sigma.get(w) + sigma.get(v));
+                            P.get(w).push(v);
+                        }
+                    }
+                }
+
+                const delta = new Map();
+                nodes.forEach(v => delta.set(v.id, 0));
+
+                while (S.length > 0) {
+                    const w = S.pop();
+                    for (const v of P.get(w)) {
+                        delta.set(v, delta.get(v) + (sigma.get(v) / sigma.get(w)) * (1 + delta.get(w)));
+                    }
+                    if (w !== s) {
+                        CB.set(w, CB.get(w) + delta.get(w));
+                    }
+                }
+            });
+
+            nodes.forEach(n => {
+                n.betweenness = (CB.get(n.id) || 0) / 2;
+            });
+        } else {
+             // Fallback for large graphs
+             nodes.forEach(n => n.betweenness = 0);
+        }
 
         // Use full extent for width scale stability (legacy usage removed)
         // const widthScale = d3.scaleLinear().domain(fullStrengthExtent).range([0.1, 0.6]); 

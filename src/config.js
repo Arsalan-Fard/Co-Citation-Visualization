@@ -56,5 +56,17 @@ const AXIS_METRICS = {
         scaleType: "categorical",
         valueAccessor: node => node.subfield || "Unknown",
         formatTick: d => d
+    },
+    centrality: {
+        label: "Degree Centrality",
+        scaleType: "linear",
+        valueAccessor: node => node.centrality || 0,
+        formatTick: d => d.toFixed(3)
+    },
+    betweenness: {
+        label: "Betweenness Centrality",
+        scaleType: "linear",
+        valueAccessor: node => node.betweenness || 0,
+        formatTick: d => d.toFixed(4)
     }
 };
