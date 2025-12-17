@@ -480,8 +480,10 @@ class NetworkVisualizer {
             const yValue = getMetricValue(node, yMetricInfo.key);
             node.targetX = xScale(xValue != null ? xValue : xDefault);
             node.targetY = yScale(yValue != null ? yValue : yDefault);
-            node.x = node.targetX;
-            node.y = node.targetY;
+            if (!Number.isFinite(node.x)) node.x = node.targetX;
+            if (!Number.isFinite(node.y)) node.y = node.targetY;
+            if (!Number.isFinite(node.vx)) node.vx = 0;
+            if (!Number.isFinite(node.vy)) node.vy = 0;
         });
 
         let radiusScale = null;
