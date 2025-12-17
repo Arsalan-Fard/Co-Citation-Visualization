@@ -1,5 +1,4 @@
 function updateAnalytics(mode = "both") {
-    // 1. Build Adjacency Map for current mode
     const adjacency = new Map();
     const addEdge = (p1, p2, w) => {
         if (isNaN(w)) return;
@@ -16,7 +15,6 @@ function updateAnalytics(mode = "both") {
         globalBibliographicData.forEach(d => addEdge(d.paper1, d.paper2, +d.coupling_strength));
     }
 
-    // 2. Identify Read and Unread Papers
     const readPapers = [];
     const unreadPapers = [];
     const readPaperIds = new Set();
@@ -26,7 +24,6 @@ function updateAnalytics(mode = "both") {
             readPapers.push({ id, title: meta.title });
             readPaperIds.add(id);
         } else {
-            // Score for top 10 (still used for heatmap columns)
             let score = 0;
             if (adjacency.has(id)) {
                 for (const w of adjacency.get(id).values()) {
@@ -40,19 +37,16 @@ function updateAnalytics(mode = "both") {
     unreadPapers.sort((a, b) => b.score - a.score);
     const top10 = unreadPapers.slice(0, 10);
 
-    // 3. Prepare DOM
     const panel = d3.select(".analytics-panel");
     panel.selectAll(".paper-list").remove();
     panel.selectAll(".heatmap-container").remove();
-    panel.selectAll(".charts-grid").remove(); // Legacy cleanup
+    panel.selectAll(".charts-grid").remove();
     panel.selectAll(".heatmap-legend").remove();
     panel.selectAll(".stability-chart-container").remove();
 
-    // 4. Render Heatmap if we have read papers and results
     if (readPapers.length > 0 && top10.length > 0) {
         const heatmapContainer = panel.append("div").attr("class", "heatmap-container");
         
-        // Calculate matrix: rows = read papers, cols = top 10 unread
         const matrix = [];
         let maxVal = 0;
 
@@ -93,7 +87,6 @@ function updateAnalytics(mode = "both") {
         const g = svg.append("g")
             .attr("transform", `translate(${margin.left},${margin.top})`);
 
-        // Column labels (1..10)
         g.selectAll(".col-label")
             .data(top10)
             .join("text")
@@ -106,7 +99,6 @@ function updateAnalytics(mode = "both") {
         const colorScale = d3.scaleSequential(d3.interpolateBlues)
             .domain([0, Math.log10((maxVal || 1) + 1)]); 
 
-        // Create tooltip div if not exists
         let tooltip = d3.select("body").select(".heatmap-tooltip");
         if (tooltip.empty()) {
             tooltip = d3.select("body").append("div")
@@ -190,11 +182,6 @@ function updateAnalytics(mode = "both") {
             .text(maxVal.toFixed(1) + " (log scale)");
     }
 
-    // 5. Bootstrap Stability for Selected Papers
-    // "Repeatedly subsample references.csv (or citation.csv) rows and recompute... score-to-read"
-    // We simulate this by perturbing the edge weights (representing shared refs or citations)
-    // using a Binomial(w, p) approximation.
-
     const targetPapers = [];
     if (selectedNodeIds.size > 0) {
         unreadPapers.forEach(p => {
@@ -204,35 +191,24 @@ function updateAnalytics(mode = "both") {
         });
     }
 
-    // Only render stability chart if we have selected papers
-    // if (targetPapers.length === 0) {
-    //     updateAnalyticsSelection();
-    //     return;
-    // }
-
     const nBootstrap = 50;
     const subsampleRate = 0.8;
-    // We re-rank the entire pool to ensure correct rank for any selected paper
     const candidatePool = unreadPapers; 
     const rankDistributions = new Map();
     targetPapers.forEach(p => rankDistributions.set(p.id, []));
 
     if (targetPapers.length > 0) {
         for (let i = 0; i < nBootstrap; i++) {
-            // Calculate perturbed scores
             const currentScores = [];
             
             for (const p of candidatePool) {
                 let perturbedScore = 0;
                 if (adjacency.has(p.id)) {
                     for (const w of adjacency.get(p.id).values()) {
-                        // Simulate Binomial(n=w, p=subsampleRate)
-                        // Using Normal approximation for performance: N(w*p, w*p*(1-p))
                         if (w > 0) {
                             const mean = w * subsampleRate;
                             const variance = w * subsampleRate * (1 - subsampleRate);
                             const std = Math.sqrt(variance);
-                            // Box-Muller transform for Gaussian noise
                             const u1 = Math.random();
                             const u2 = Math.random();
                             const z = Math.sqrt(-2.0 * Math.log(u1 || 1e-9)) * Math.cos(2.0 * Math.PI * u2);
@@ -244,9 +220,8 @@ function updateAnalytics(mode = "both") {
             }
 
             // Sort descending
-            currentScores.sort((a, b) => b.score - a.score);
+                currentScores.sort((a, b) => b.score - a.score);
 
-            // Record rank (1-based)
             currentScores.forEach((item, index) => {
                 if (rankDistributions.has(item.id)) {
                     rankDistributions.get(item.id).push(index + 1);
@@ -255,7 +230,6 @@ function updateAnalytics(mode = "both") {
         }
     }
 
-    // Prepare Box Plot Data
 	    const boxData = targetPapers.map(p => {
 	        const ranks = rankDistributions.get(p.id);
 	        ranks.sort((a, b) => a - b);
@@ -292,26 +266,21 @@ function updateAnalytics(mode = "both") {
 	        .attr("width", stabWidth)
 	        .attr("height", stabHeight);
 
-    const gStab = stabSvg.append("g")
-        .attr("transform", `translate(${stabMargin.left},${stabMargin.top})`);
+	    const gStab = stabSvg.append("g")
+	        .attr("transform", `translate(${stabMargin.left},${stabMargin.top})`);
 
-	    // Y Axis: The Selected Papers (categorical)
-	    // We list them 1..N
 	    const yStab = d3.scaleBand()
-	        .domain(targetPapers.map((d, i) => i)) // use index 0..N-1
+	        .domain(targetPapers.map((d, i) => i))
 	        .range([0, stabInnerHeight])
 	        .padding(0.2);
 
-	    // X Axis: Rank (1 to 50)
-	    // We want rank 1 on the LEFT.
 	    const maxObservedRank = d3.max(boxData, d => d.max) || 10;
 	    const xDomainMax = Math.max(15, maxObservedRank);
 	    const xStab = d3.scaleLinear()
-	        .domain([1, xDomainMax]) // Ensure at least a bit of spread shown
+	        .domain([1, xDomainMax])
 	        .range([0, stabInnerWidth]);
 	    const xTickCount = Math.max(4, Math.floor(stabInnerWidth / 70));
 
-	    // Gridlines
 	    const stabGrid = gStab.append("g")
 	        .attr("class", "grid-lines")
 	        .attr("transform", `translate(0,${stabInnerHeight})`)
@@ -339,7 +308,6 @@ function updateAnalytics(mode = "both") {
 	        .style("font-size", "10px")
 	        .text("Rank (lower is better)");
 
-	    // Y Axis (Paper numbers 1..N)
 	    const stabYAxis = gStab.append("g")
 	        .call(d3.axisLeft(yStab).tickFormat(i => i + 1));
 	    stabYAxis.selectAll("text")
@@ -348,7 +316,6 @@ function updateAnalytics(mode = "both") {
 	    stabYAxis.selectAll("path, line")
 	        .attr("stroke", "#444");
 	
-	    // Violin (density) helper functions
 	    const kernelEpanechnikov = (bandwidth) => (v) => {
 	        const x = v / bandwidth;
 	        return Math.abs(x) <= 1 ? (0.75 * (1 - x * x)) / bandwidth : 0;
@@ -372,7 +339,6 @@ function updateAnalytics(mode = "both") {
 	        .y0(d => -violinScale(d[1]))
 	        .y1(d => violinScale(d[1]));
 
-	    // Render Violin + Box Plots
 	    const groups = gStab.selectAll(".stab-row")
 	        .data(boxData)
 	        .join("g")
@@ -387,13 +353,11 @@ function updateAnalytics(mode = "both") {
 	        .attr("stroke-opacity", 0.45)
 	        .attr("stroke-width", 1);
 	
-	    // Box/whiskers (outline only; no fill)
 	    const whiskerColor = "#94a3b8";
 	    const boxStroke = "#e2e8f0";
 	    const boxHeight = Math.max(12, yStab.bandwidth() * 0.62);
 	    const capSize = Math.max(8, yStab.bandwidth() * 0.55);
 	
-	    // Whisker line + caps (min to max)
 	    groups.append("line")
 	        .attr("x1", d => xStab(d.min))
 	        .attr("x2", d => xStab(d.max))
@@ -417,7 +381,6 @@ function updateAnalytics(mode = "both") {
 	        .attr("stroke-width", 1)
 	        .attr("stroke-opacity", 0.9);
 	
-	    // IQR box (q1 to q3)
 	    groups.append("rect")
 	        .attr("x", d => Math.min(xStab(d.q1), xStab(d.q3)))
 	        .attr("y", -boxHeight / 2)
@@ -428,7 +391,6 @@ function updateAnalytics(mode = "both") {
 	        .attr("stroke-opacity", 0.9)
 	        .attr("stroke-width", 1);
 	
-	    // Median line
 	    groups.append("line")
 	        .attr("x1", d => xStab(d.median))
 	        .attr("x2", d => xStab(d.median))
@@ -438,7 +400,6 @@ function updateAnalytics(mode = "both") {
 	        .attr("stroke-opacity", 0.95)
 	        .attr("stroke-width", 1);
 
-	    // Tooltip for papers
 	    groups.append("rect") // Invisible overlay for tooltip
 	        .attr("x", 0)
 	        .attr("y", -yStab.bandwidth()/2)
@@ -466,7 +427,6 @@ function updateAnalytics(mode = "both") {
 }
 
 function updateAnalyticsSelection() {
-    // Only update heatmap selection visuals
     const container = d3.select(".heatmap-container");
     container.classed("has-selection", selectedNodeIds.size > 0);
     container.selectAll(".heatmap-cell")

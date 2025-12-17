@@ -66,7 +66,6 @@ function setupControls() {
         });
     }
     
-    // Threshold Sliders
     const cocitationSlider = document.getElementById('cocitation-strength-slider');
     const cocitationValue = document.getElementById('cocitation-threshold-value');
     if (cocitationSlider && cocitationValue) {
@@ -99,7 +98,6 @@ function setupControls() {
         });
     }
 
-    // Filter Checkboxes
     const filterRead = document.getElementById('filter-read');
     const filterSurvey = document.getElementById('filter-survey');
 
@@ -162,7 +160,6 @@ function setupDragAndDrop() {
     const dropZones = document.querySelectorAll('.drop-zone');
     const sourceContainer = document.querySelector('.draggable-source');
     
-    // Map data-type to panel IDs
     const panelMap = {
         'cocitation': 'cocitation-panel',
         'bibliographic': 'bibliographic-panel',
@@ -199,7 +196,6 @@ function setupDragAndDrop() {
             
             if (!draggedItem) return;
 
-            // If zone has an item, move it back to source
             const existingItem = zone.querySelector('.draggable-item');
             if (existingItem) {
                 sourceContainer.appendChild(existingItem);
@@ -235,36 +231,32 @@ function setupDragAndDrop() {
         const appContainer = document.getElementById('app-container');
         const panels = ['cocitation-panel', 'bibliographic-panel', 'sankey-panel'];
         
-        // Reset all panels
         panels.forEach(id => {
             const el = document.getElementById(id);
             if(el) {
                 el.classList.add('hidden');
-                el.style.gridColumn = 'auto'; // Reset grid column
+                el.style.gridColumn = 'auto';
             }
         });
 
-        // Configure Layout
         const leftHidden = appContainer.classList.contains('left-hidden');
         const rightHidden = appContainer.classList.contains('right-hidden');
         
         let gridTemplate = (leftHidden ? "0px " : "320px ");
         
-        // Panel 1
         if (panel1Id) {
             const p1 = document.getElementById(panel1Id);
             p1.classList.remove('hidden');
-            p1.style.gridColumn = "2"; // Explicitly place in View 1 column
+            p1.style.gridColumn = "2";
             gridTemplate += "1fr ";
         } else {
-             gridTemplate += "0fr "; // Collapse
+             gridTemplate += "0fr ";
         }
 
-        // Panel 2
         if (panel2Id) {
              const p2 = document.getElementById(panel2Id);
              p2.classList.remove('hidden');
-             p2.style.gridColumn = "3"; // Explicitly place in View 2 column
+             p2.style.gridColumn = "3";
              gridTemplate += "1fr ";
         } else {
              gridTemplate += "0fr ";
@@ -278,19 +270,16 @@ function setupDragAndDrop() {
         
         appContainer.style.gridTemplateColumns = gridTemplate;
         
-        // Also update ResizeObserver for graphs
          setTimeout(() => {
             updateAllGraphs();
-        }, 450); // Wait for transition
+        }, 450);
     }
 
-    // Initial Setup: Place Co-citation in Zone 1, others remain in source
     const cocitationItem = sourceContainer.querySelector('[data-type="cocitation"]');
     const zone1 = document.querySelector('.drop-zone[data-zone="1"]');
 
     if (cocitationItem && zone1) zone1.appendChild(cocitationItem);
 
-    // Initial Layout Update
     updateLayoutFromDrop();
 }
 
@@ -307,7 +296,6 @@ function setupAnalyticsControls() {
     });
 }
 
-// --- Context Menu Logic ---
 let contextMenuTargetId = null;
 
 function showContextMenu(event, nodeId) {
@@ -321,12 +309,10 @@ function showContextMenu(event, nodeId) {
 
     console.log(`Showing menu for ${nodeId} at ${event.pageX}, ${event.pageY}`);
 
-    // Basic positioning
-    menu.style.position = 'fixed'; // Ensure viewport positioning
-    menu.style.left = `${event.clientX}px`; // Use clientX for fixed
-    menu.style.top = `${event.clientY}px`;  // Use clientY for fixed
+    menu.style.position = 'fixed';
+    menu.style.left = `${event.clientX}px`; 
+    menu.style.top = `${event.clientY}px`; 
     
-    // Force visibility styles
     menu.classList.remove('hidden');
     menu.style.display = 'block';
     menu.style.zIndex = '99999';
@@ -345,27 +331,19 @@ function hideContextMenu() {
 function deleteNode(nodeId) {
     if (!nodeId) return;
     
-    // Remove from metadata
     paperMeta.delete(nodeId);
     
-    // Remove from selection if present
     selectedNodeIds.delete(nodeId);
     
-    // Note: We do NOT need to manually filter globalCocitationData/globalBibliographicData 
-    // because updateGraph() in NetworkVisualizer rebuilds nodes from paperMeta 
-    // and filters links based on valid node IDs.
-    
     updateAllGraphs();
-    updateAnalytics(currentAnalyticsMode); // Refresh analytics
+    updateAnalytics(currentAnalyticsMode);
 }
 
 function setupContextMenu() {
-    // Hide menu on click elsewhere
     document.addEventListener('click', () => {
         hideContextMenu();
     });
 
-    // Handle Delete click
     const deleteBtn = document.getElementById('menu-delete');
     if (deleteBtn) {
         deleteBtn.addEventListener('click', () => {
@@ -377,5 +355,4 @@ function setupContextMenu() {
     }
 }
 
-// Initialize context menu listeners
 setupContextMenu();

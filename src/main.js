@@ -38,7 +38,6 @@ Promise.all([
         const isRead = row.read ? +row.read === 1 : false;
         const title = row.title ? row.title.trim() : "Untitled";
         
-        // Survey detection logic
         const type = (row.type || "").toLowerCase();
         const titleLower = title.toLowerCase();
         const isSurvey = type.includes("review") || type.includes("survey") || titleLower.includes("survey") || titleLower.includes("review");

@@ -87,7 +87,6 @@ function getMetricValue(node, metricKey) {
     return raw;
 }
 
-// --- Sankey Helpers (ported from river.js) ---
 function normKey(value) {
     const str = (value ?? "").toString().trim();
     return str.length ? str : "Unknown";
@@ -103,7 +102,6 @@ function buildPaperCategoryCounts(rows, paperIdKey, categoryKey) {
     const out = new Map();
     rows.forEach(row => {
         const paperId = normKey(row[paperIdKey]);
-        // Extract category (simple lookup for now, assumed flat CSV structure)
         const cat = normKey(row[categoryKey]);
         addToNestedCount(out, paperId, cat, 1);
     });

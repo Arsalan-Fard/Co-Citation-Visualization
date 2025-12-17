@@ -726,12 +726,20 @@ class NetworkVisualizer {
                  this.currentNodeSelection.attr("cx", d => d.x).attr("cy", d => d.y);
             }
             
+            const linkLerp = 0.18; // Ease edges so they don't outrun node movement
             this.currentLinkSelection.attr("d", d => {
-                const sx = d.source.x, sy = d.source.y;
-                const tx = d.target.x, ty = d.target.y;
-                const dx = tx - sx, dy = ty - sy;
+                if (!Number.isFinite(d.rsx)) {
+                    d.rsx = d.source.x; d.rsy = d.source.y;
+                    d.rtx = d.target.x; d.rty = d.target.y;
+                }
+                d.rsx += (d.source.x - d.rsx) * linkLerp;
+                d.rsy += (d.source.y - d.rsy) * linkLerp;
+                d.rtx += (d.target.x - d.rtx) * linkLerp;
+                d.rty += (d.target.y - d.rty) * linkLerp;
+
+                const dx = d.rtx - d.rsx, dy = d.rty - d.rsy;
                 const dr = Math.sqrt(dx * dx + dy * dy);
-                return `M${sx},${sy}A${dr},${dr} 0 0,1 ${tx},${ty}`;
+                return `M${d.rsx},${d.rsy}A${dr},${dr} 0 0,1 ${d.rtx},${d.rty}`;
             });
         });
 

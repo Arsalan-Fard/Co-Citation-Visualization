@@ -1,10 +1,9 @@
 function buildSankeyData({
-    activePaperIds, // changed from readPaperIds
+    activePaperIds,
     mainMeta,
     foundationsByPaper,
     audienceByPaper
 }) {
-    // 1. Identify Top Categories (Field) for Foundations (Left) and Audience (Right)
     const foundationTotals = aggregateCategoryTotals(foundationsByPaper, activePaperIds);
     const audienceTotals = aggregateCategoryTotals(audienceByPaper, activePaperIds);
 
@@ -12,7 +11,6 @@ function buildSankeyData({
     const topFoundationCats = topKeysByValue(foundationTotals, maxCategories, ["Unknown"]);
     const topAudienceCats = topKeysByValue(audienceTotals, maxCategories, ["Unknown"]);
     
-    // Add "Other" if needed
     topFoundationCats.add("Other");
     topAudienceCats.add("Other");
 
@@ -24,7 +22,6 @@ function buildSankeyData({
         nodes.push(node);
     };
 
-    // Left Nodes: Foundations
     Array.from(topFoundationCats).forEach(cat => {
         addNode({
             id: `F:${cat}`,
@@ -33,7 +30,6 @@ function buildSankeyData({
         });
     });
 
-    // Middle Nodes: Active Papers (Read + Selected)
     activePaperIds.forEach(paperId => {
         const meta = mainMeta.get(paperId) || {};
         addNode({
@@ -43,11 +39,10 @@ function buildSankeyData({
             paperId,
             primaryTopic: meta.primaryTopic,
             isRead: meta.isRead,
-            isSurvey: meta.isSurvey // Add survey status
+            isSurvey: meta.isSurvey
         });
     });
 
-    // Right Nodes: Audience
     Array.from(topAudienceCats).forEach(cat => {
         addNode({
             id: `A:${cat}`,
@@ -71,13 +66,11 @@ function buildSankeyData({
         const fCounts = foundationsByPaper.get(paperId) || new Map();
         const aCounts = audienceByPaper.get(paperId) || new Map();
         
-        // Foundation -> Paper
         fCounts.forEach((count, catRaw) => {
             const cat = topFoundationCats.has(catRaw) ? catRaw : "Other";
             addLink(`F:${cat}`, `P:${paperId}`, paperId, count);
         });
 
-        // Paper -> Audience
         aCounts.forEach((count, catRaw) => {
             const cat = topAudienceCats.has(catRaw) ? catRaw : "Other";
             addLink(`P:${paperId}`, `A:${cat}`, paperId, count);
@@ -99,7 +92,7 @@ class SankeyVisualizer {
         this.resizeTimeout = null;
         this.refData = [];
         this.citData = [];
-        this.highlightRead = true; // Default match UI
+        this.highlightRead = true;
         this.highlightSurvey = false;
         
         this.setupResizeObserver();
@@ -129,9 +122,8 @@ class SankeyVisualizer {
 
     updateDimensions() {
         const rect = this.panel.getBoundingClientRect();
-        // Account for header if any
         this.width = rect.width;
-        this.height = Math.max(0, rect.height - 40); // Subtract header height approx, ensure non-negative
+        this.height = Math.max(0, rect.height - 40);
         this.svg.attr("width", this.width).attr("height", this.height);
     }
 
@@ -145,12 +137,10 @@ class SankeyVisualizer {
         if (this.width < 50 || this.height < 50) return;
         this.svg.selectAll("*" ).remove();
 
-        // 1. Get Active Papers (Read + Selected)
         const activePaperIds = new Set();
         paperMeta.forEach((meta, id) => {
             if (meta.isRead) activePaperIds.add(id);
         });
-        // Add currently selected nodes
         selectedNodeIds.forEach(id => activePaperIds.add(id));
 
         if (activePaperIds.size === 0) {
@@ -163,13 +153,11 @@ class SankeyVisualizer {
             return;
         }
 
-        // 2. Build Category Counts (Field)
         const foundationsByPaper = buildPaperCategoryCounts(this.refData, "source_paper_id", "paper_field");
         const audienceByPaper = buildPaperCategoryCounts(this.citData, "source_paper_id", "paper_field");
 
-        // 3. Build Sankey Data
         const graphData = buildSankeyData({
-            activePaperIds, // Pass the combined set
+            activePaperIds,
             mainMeta: paperMeta,
             foundationsByPaper,
             audienceByPaper
@@ -177,7 +165,6 @@ class SankeyVisualizer {
 
         if (!graphData.nodes.length) return;
 
-        // 4. Layout
         const sankey = d3.sankey()
             .nodeId(d => d.id)
             .nodeWidth(14)
@@ -196,22 +183,20 @@ class SankeyVisualizer {
             return;
         }
 
-        // 5. Render
         const COLORS = {
-            foundation: "#94A3B8", // slate-400
-            audience: "#C4B5FD"    // violet-300
+            foundation: "#94A3B8",
+            audience: "#C4B5FD"
         };
 
         const g = this.svg.append("g");
 
-        // Links
         const link = g.append("g")
             .attr("fill", "none")
             .attr("stroke-opacity", 0.15)
             .selectAll("path")
             .data(graph.links)
             .join("path")
-            .attr("class", "sankey-link") // Add class
+            .attr("class", "sankey-link")
             .attr("d", d3.sankeyLinkHorizontal())
             .attr("stroke-width", d => Math.max(1, d.width))
             .attr("stroke", d => {
@@ -223,12 +208,11 @@ class SankeyVisualizer {
             .text(d => `${d.source.name} → ${d.target.name}
 ${d.value} connections`);
 
-        // Nodes
         const node = g.append("g")
             .selectAll("rect")
             .data(graph.nodes)
             .join("rect")
-            .attr("class", "sankey-node") // Add class
+            .attr("class", "sankey-node")
             .attr("x", d => d.x0)
             .attr("y", d => d.y0)
             .attr("height", d => Math.max(1, d.y1 - d.y0))
@@ -236,7 +220,6 @@ ${d.value} connections`);
             .attr("fill", d => {
                 if (d.type === "foundation") return COLORS.foundation;
                 if (d.type === "audience") return COLORS.audience;
-                // Paper coloring logic
                 if (this.highlightRead && d.isRead) return READ_NODE_COLOR;
                 if (this.highlightSurvey && d.isSurvey) return SURVEY_NODE_COLOR;
                 return DEFAULT_NODE_COLOR;
@@ -255,17 +238,12 @@ ${d.value} connections`);
                 const isSelected = selectedNodeIds.has(d.paperId);
 
                 if (hasSelection && !isSelected) {
-                    // Case 2: Selection exists, hovering a NEW (unselected) thing
-                    // Apply 'hovered-candidate' which should undim it but be less bright than selected
                     link.classed("hovered-candidate", l => l.paperId === d.paperId);
                     node.classed("hovered-candidate", n => n.type === "paper" && n.paperId === d.paperId);
                 } else if (hasSelection && isSelected) {
-                    // Case 3: Selection exists, hovering an ALREADY selected thing
-                    // Make it super bright (level 0 highlight)
                     link.classed("selected-hovered", l => l.paperId === d.paperId);
                     node.classed("selected-hovered", n => n.type === "paper" && n.paperId === d.paperId);
                 } else if (!hasSelection) {
-                    // Case 1: No selection, standard highlight (brightest/level 1 equivalent)
                     link.classed("highlighted", l => l.paperId === d.paperId);
                     node.classed("highlighted", n => n.type === "paper" && n.paperId === d.paperId);
                 }
@@ -278,7 +256,6 @@ ${d.value} connections`);
                     .classed("hovered-candidate", false)
                     .classed("selected-hovered", false);
                 
-                // Restore selection state
                 this.updateHighlights(selectedNodeIds);
             });
 
@@ -286,13 +263,12 @@ ${d.value} connections`);
             .text(d => `${d.name}
 ${d.value}`);
 
-        // Labels
         g.append("g")
             .attr("font-size", "10px")
             .attr("fill", "#ddd")
             .style("pointer-events", "none")
             .selectAll("text")
-            .data(graph.nodes.filter(d => d.type !== "paper")) // Exclude paper labels
+            .data(graph.nodes.filter(d => d.type !== "paper"))
             .join("text")
             .attr("x", d => d.x0 < this.width / 2 ? d.x1 + 6 : d.x0 - 6)
             .attr("y", d => (d.y1 + d.y0) / 2)
@@ -303,12 +279,10 @@ ${d.value}`);
         this.nodesSelection = node;
         this.linksSelection = link;
         
-        // Apply selection highlights
         this.updateHighlights(selectedNodeIds);
     }
     
     updateSelection(selectedSet) {
-         // Re-render the graph to include/exclude nodes based on selection
          this.updateGraph();
     }
 
