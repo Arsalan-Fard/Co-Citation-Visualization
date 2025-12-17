@@ -31,7 +31,21 @@ class NetworkVisualizer {
         if (type === 'read') this.highlightRead = value;
         if (type === 'survey') this.highlightSurvey = value;
         if (type === 'citation') this.highlightCitation = value;
-        this.updateGraph();
+        this.applyFilterStyles();
+    }
+
+    applyFilterStyles() {
+        if (!this.nodes || !this.currentNodeSelection) return;
+
+        if (this.highlightCitation) {
+            this.updateGradients(this.nodes);
+        } else {
+            this.svg.select("defs").selectAll(".burst-gradient").remove();
+        }
+
+        if (this.fillForNode) {
+            this.currentNodeSelection.attr("fill", d => this.fillForNode(d));
+        }
     }
 
     setupResizeObserver() {
@@ -279,10 +293,23 @@ class NetworkVisualizer {
             allNodeIds.add(d.paper2);
         });
 
+        // Preserve previous positions to prevent re-layout explosion
+        const oldPositions = new Map();
+        if (this.nodes) {
+            this.nodes.forEach(n => {
+                oldPositions.set(n.id, { x: n.x, y: n.y, vx: n.vx, vy: n.vy });
+            });
+        }
+
         const nodes = Array.from(allNodeIds).map(id => {
             const meta = paperMeta.get(id) || {};
+            const oldPos = oldPositions.get(id);
             return {
                 id,
+                x: oldPos ? oldPos.x : undefined,
+                y: oldPos ? oldPos.y : undefined,
+                vx: oldPos ? oldPos.vx : undefined,
+                vy: oldPos ? oldPos.vy : undefined,
                 year: meta.year,
                 cited: meta.cited,
                 dateValue: meta.dateValue,
@@ -509,6 +536,8 @@ class NetworkVisualizer {
             return colorScale(value);
         };
 
+        this.fillForNode = fillForNode;
+
         const gridLayer = this.graphGroup.append("g").attr("class", "grid-layer");
 
         const yRange = yScale.range();
@@ -546,11 +575,9 @@ class NetworkVisualizer {
             .attr("y", yMax + 25)
             .text(d => xFormatter(d));
 
-        if (xMetricDef.scaleType === "time") {
-            xLabelGroup.attr("transform", d => `rotate(-45, ${xScale(d)}, ${yMax + 35})`);
-        } else {
-            xLabelGroup.attr("transform", null);
-        }
+        // Apply rotation to all x-axis labels to prevent overlap
+        xLabelGroup.attr("transform", d => `rotate(-45, ${xScale(d)}, ${yMax + 35})`)
+                   .style("text-anchor", "end"); // Align text to end for better readability when rotated
 
         const yTicks = typeof yScale.ticks === "function" ? yScale.ticks(10) : yScale.domain();
         gridLayer.append("g")
@@ -607,6 +634,9 @@ class NetworkVisualizer {
             .attr("cy", d => d.y)
             .on("click", (event, d) => {
                 handleGlobalNodeClick(event, d);
+            })
+            .on("contextmenu", (event, d) => {
+                showContextMenu(event, d.id);
             })
             .on("mouseenter", (event, d) => {
                 // Highlight connected links

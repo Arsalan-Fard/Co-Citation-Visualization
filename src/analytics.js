@@ -103,8 +103,8 @@ function updateAnalytics(mode = "both") {
             .style("text-anchor", "middle")
             .text((d, i) => i + 1);
 
-        const colorScale = d3.scaleSequential(d3.interpolateViridis)
-            .domain([0, maxVal || 1]); 
+        const colorScale = d3.scaleSequential(d3.interpolateBlues)
+            .domain([0, Math.log10((maxVal || 1) + 1)]); 
 
         // Create tooltip div if not exists
         let tooltip = d3.select("body").select(".heatmap-tooltip");
@@ -123,7 +123,7 @@ function updateAnalytics(mode = "both") {
                 .attr("y", i * cellSize)
                 .attr("width", cellSize - 1)
                 .attr("height", cellSize - 1)
-                .attr("fill", d => d.value === 0 ? "#333" : colorScale(d.value))
+                .attr("fill", d => d.value === 0 ? "#333" : colorScale(Math.log10(d.value + 1)))
                 .on("mouseover", (event, d) => {
                     tooltip.transition().duration(200).style("opacity", 1);
                     tooltip.html(`
@@ -164,7 +164,7 @@ function updateAnalytics(mode = "both") {
             const offset = i / 10;
             linearGradient.append("stop")
                 .attr("offset", (offset * 100) + "%")
-                .attr("stop-color", d3.interpolateViridis(offset));
+                .attr("stop-color", d3.interpolateBlues(offset));
         }
         
         const legendG = legendSvg.append("g")
@@ -187,7 +187,7 @@ function updateAnalytics(mode = "both") {
             .attr("x", legendWidth)
             .attr("y", legendHeight + 12)
             .style("text-anchor", "end")
-            .text(maxVal);
+            .text(maxVal.toFixed(1) + " (log scale)");
     }
 
     // 5. Bootstrap Stability for Selected Papers

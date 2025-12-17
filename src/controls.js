@@ -306,3 +306,76 @@ function setupAnalyticsControls() {
         });
     });
 }
+
+// --- Context Menu Logic ---
+let contextMenuTargetId = null;
+
+function showContextMenu(event, nodeId) {
+    event.preventDefault();
+    contextMenuTargetId = nodeId;
+    const menu = document.getElementById('context-menu');
+    if (!menu) {
+        console.error("Context menu element not found!");
+        return;
+    }
+
+    console.log(`Showing menu for ${nodeId} at ${event.pageX}, ${event.pageY}`);
+
+    // Basic positioning
+    menu.style.position = 'fixed'; // Ensure viewport positioning
+    menu.style.left = `${event.clientX}px`; // Use clientX for fixed
+    menu.style.top = `${event.clientY}px`;  // Use clientY for fixed
+    
+    // Force visibility styles
+    menu.classList.remove('hidden');
+    menu.style.display = 'block';
+    menu.style.zIndex = '99999';
+}
+
+
+function hideContextMenu() {
+    const menu = document.getElementById('context-menu');
+    if (menu) {
+        menu.classList.add('hidden');
+        menu.style.display = 'none';
+    }
+    contextMenuTargetId = null;
+}
+
+function deleteNode(nodeId) {
+    if (!nodeId) return;
+    
+    // Remove from metadata
+    paperMeta.delete(nodeId);
+    
+    // Remove from selection if present
+    selectedNodeIds.delete(nodeId);
+    
+    // Note: We do NOT need to manually filter globalCocitationData/globalBibliographicData 
+    // because updateGraph() in NetworkVisualizer rebuilds nodes from paperMeta 
+    // and filters links based on valid node IDs.
+    
+    updateAllGraphs();
+    updateAnalytics(currentAnalyticsMode); // Refresh analytics
+}
+
+function setupContextMenu() {
+    // Hide menu on click elsewhere
+    document.addEventListener('click', () => {
+        hideContextMenu();
+    });
+
+    // Handle Delete click
+    const deleteBtn = document.getElementById('menu-delete');
+    if (deleteBtn) {
+        deleteBtn.addEventListener('click', () => {
+            if (contextMenuTargetId) {
+                deleteNode(contextMenuTargetId);
+                hideContextMenu();
+            }
+        });
+    }
+}
+
+// Initialize context menu listeners
+setupContextMenu();

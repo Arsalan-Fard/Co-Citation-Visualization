@@ -12,7 +12,7 @@ body {
 
 #app-container {
     display: grid;
-    grid-template-columns: 320px 1fr 1fr 360px; /* Default split view */
+    grid-template-columns: 320px 1fr 1fr 360px; 
     grid-template-rows: 1fr;
     height: 100vh;
     gap: 0;
@@ -23,23 +23,23 @@ body {
     grid-template-columns: 0px 1fr 1fr 0px;
 }
 
-/* Flexible View configurations controlled by JS via grid-column manipulation or specific classes */
-/* We will switch to a more dynamic grid based on visible panels */
+
+
 
 .main-panel {
     background: #1a1a1a;
     position: relative;
     overflow: hidden;
     min-width: 0;
-    grid-row: 1; /* Ensure it stays in the first row */
-    /* Grid placement will be handled inline or by specific classes if needed */
+    grid-row: 1; 
+    
 }
 
 .main-panel.hidden {
     display: none;
 }
 
-/* Override existing ID-based grid columns as they are now dynamic */
+
 #cocitation-panel, #bibliographic-panel, #sankey-panel {
     grid-column: auto;
 }
@@ -72,7 +72,7 @@ body {
 }
 
 .analytics-panel {
-    grid-column: 4; /* Fixed for now, JS might need to adjust if column counts change */
+    grid-column: 4; 
     display: flex;
     flex-direction: column;
     align-items: center;
@@ -82,10 +82,10 @@ body {
     padding: 25px 30px;
     overflow-y: auto;
     transition: transform 0.4s cubic-bezier(0.4, 0, 0.2, 1);
-    grid-row: 1; /* Ensure it stays in the first row */
+    grid-row: 1; 
 }
 
-/* Ensure analytics panel stays at the end */
+
 #app-container > .analytics-panel {
     order: 999;
 }
@@ -132,7 +132,7 @@ body {
 .control-value {
     font-size: 36px;
     font-weight: 700;
-    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    background: linear-gradient(135deg, #4A90E2 0%, #2563EB 100%);
     background-clip: text;
     -webkit-text-fill-color: transparent;
     margin-bottom: 10px;
@@ -154,9 +154,9 @@ body {
     width: 18px;
     height: 18px;
     border-radius: 50%;
-    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    background: linear-gradient(135deg, #4A90E2 0%, #2563EB 100%);
     cursor: pointer;
-    box-shadow: 0 2px 8px rgba(102, 126, 234, 0.6);
+    box-shadow: 0 2px 8px rgba(74, 144, 226, 0.6);
     transition: transform 0.2s;
 }
 
@@ -173,7 +173,7 @@ body {
     color: #666;
 }
 
-/* ... */
+
 
 .panel-separator {
     border: 0;
@@ -246,13 +246,13 @@ body {
 .node.selected {
     stroke: #bfc5e2;
     stroke-width: 2px;
-    filter: drop-shadow(0 0 8px rgba(102, 126, 234, 0.6));
+    filter: drop-shadow(0 0 8px rgba(74, 144, 226, 0.6));
 }
 
 .node.selected:hover {
     stroke: #d0d0d0ff;
     stroke-width: 2px;
-    filter: drop-shadow(0 0 15px rgba(102, 126, 234, 1));
+    filter: drop-shadow(0 0 15px rgba(74, 144, 226, 1));
     opacity: 1;
 }
 
@@ -362,12 +362,12 @@ body {
 }
 
 .hist-bar {
-    fill: #667eea;
+    fill: #4A90E2;
     transition: fill 0.2s;
 }
 
 .hist-bar:hover {
-    fill: #A855F7;
+    fill: #2563EB;
 }
 
 .hist-axis path,
@@ -400,10 +400,10 @@ body {
     width: 40px;
     height: 40px;
     border-radius: 50px;
-    border-radius: 50%;
-    background: linear-gradient(135deg, #667eea0f 0%, #667eea5c 50%);
+    border-radius: 20%;
+    background: #3887e088;
     border: 2px solid #2a2a2a;
-    color: #e0e0e0;
+    color: #c5c5c5;
     font-size: 20px;
     cursor: pointer;
     z-index: 1000;
@@ -411,20 +411,20 @@ body {
     align-items: center;
     justify-content: center;
     transition: all 0.3s ease;
-    box-shadow: 0 4px 12px rgba(102, 126, 234, 0.4);
 }
 
-.toggle-panels-btn.left-toggle {
+.toggle-panels-btn.left-toggle,
+#toggle-left-panel-btn {
     left: 20px;
 }
 
-.toggle-panels-btn.right-toggle {
+.toggle-panels-btn.right-toggle,
+#toggle-right-panel-btn {
     right: 20px;
 }
 
 .toggle-panels-btn:hover {
     transform: scale(1.1);
-    box-shadow: 0 6px 16px rgba(102, 126, 234, 0.6);
 }
 
 .toggle-panels-btn:active {
@@ -434,6 +434,22 @@ body {
 .toggle-icon {
     transition: transform 0.4s cubic-bezier(0.4, 0, 0.2, 1);
     display: inline-block;
+    line-height: 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+
+.left-toggle .toggle-icon,
+#toggle-left-panel-btn .toggle-icon {
+    margin-left: -2px;
+}
+
+
+.right-toggle .toggle-icon,
+#toggle-right-panel-btn .toggle-icon {
+    margin-right: -2px;
 }
 
 .toggle-panels-btn.collapsed .toggle-icon {
@@ -458,7 +474,7 @@ body {
 }
 
 .checkbox-label:hover {
-    color: #667eea;
+    color: #4A90E2;
 }
 
 .checkbox {
@@ -466,7 +482,7 @@ body {
     height: 18px;
     margin-right: 10px;
     cursor: pointer;
-    accent-color: #667eea;
+    accent-color: #4A90E2;
 }
 
 .checkbox-label span {
@@ -499,9 +515,9 @@ body {
 }
 
 .rank-btn.active {
-    background: #667eea;
+    background: #4A90E2;
     color: #fff;
-    border-color: #667eea;
+    border-color: #4A90E2;
 }
 
 .heatmap-container {
@@ -554,7 +570,7 @@ body {
 }
 
 .paper-item.selected {
-    border-color: #A855F7;
+    border-color: #4A90E2;
     background: #2f2f2f;
 }
 
@@ -575,7 +591,7 @@ body {
     display: block;
 }
 
-/* --- Drag and Drop Styles --- */
+
 .layout-controls {
     display: flex;
     flex-direction: column;
@@ -591,7 +607,7 @@ body {
     border-radius: 8px;
     border: 1px solid #2a2a2a;
     min-height: 40px;
-    justify-content: center; /* Center items */
+    justify-content: center; 
 }
 
 .draggable-item {
@@ -618,12 +634,12 @@ body {
 
 .drop-zones {
     display: flex;
-    flex-direction: row; /* Horizontal alignment */
+    flex-direction: row; 
     gap: 10px;
 }
 
 .drop-zone {
-    flex: 1; /* Equal width */
+    flex: 1; 
     height: 60px;
     background: #1a1a1a;
     border: 2px dashed #333;
@@ -633,11 +649,11 @@ body {
     justify-content: center;
     position: relative;
     transition: border-color 0.2s, background-color 0.2s;
-    padding: 4px; /* Small offset/padding for inner item */
+    padding: 4px; 
 }
 
 .drop-zone.drag-over {
-    border-color: #667eea;
+    border-color: #4A90E2;
     background: #222;
 }
 
@@ -646,7 +662,7 @@ body {
     color: #555;
     text-transform: uppercase;
     pointer-events: none;
-    position: absolute; /* Keep label visible behind item or centered if empty */
+    position: absolute; 
     z-index: 0;
 }
 
@@ -659,11 +675,11 @@ body {
     align-items: center;
     justify-content: center;
     box-sizing: border-box;
-    z-index: 1; /* Above label */
-    background: #333; /* Ensure background covers label */
+    z-index: 1; 
+    background: #333; 
 }
 
-/* --- Sankey Specific Styles --- */
+
 .sankey-link {
   fill: none;
   stroke-opacity: 0.22;
@@ -704,20 +720,20 @@ body {
     stroke: #ddd;
 }
 
-/* Specific overrides for Sankey highlighting */
+
 .sankey-link.dimmed.hovered-candidate {
     stroke-opacity: 0.6 !important;
-    opacity: 1 !important; /* Reset opacity from .dimmed */
+    opacity: 1 !important; 
     stroke: #ddd !important;
 }
 
 .sankey-node.dimmed.hovered-candidate {
-    opacity: 0.9 !important; /* Reset opacity from .dimmed */
+    opacity: 0.9 !important; 
     stroke: #fff !important;
     stroke-width: 2px !important;
 }
 
-/* Highlight for hovering over an ALREADY selected node in Sankey */
+
 .sankey-node.selected-hovered {
     opacity: 1 !important;
     stroke: #ffffff !important;
@@ -729,3 +745,4 @@ body {
     stroke-opacity: 0.9 !important;
     stroke: #ffffff !important;
 }
+

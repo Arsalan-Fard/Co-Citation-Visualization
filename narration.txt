@@ -13,6 +13,9 @@ DATA: How pythons works and csv created -> explain columns
 
 
 
-Visualization: introduce features alongside Insights 
+Visualization: 
 
-1. 
+1. features
+
+2. Story 1 (sankey + domain + domain)
+3. Story 2: looking for a paper finding another one.
