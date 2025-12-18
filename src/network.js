@@ -727,12 +727,20 @@ class NetworkVisualizer {
                         if (l.source.id === d.id || l.target.id === d.id) return 1;
                         return null; // Revert to CSS default (or previous inline)
                     });
+
+                if (d.subfield && window.highlightAnalyticsSubfield) {
+                    window.highlightAnalyticsSubfield(d.subfield, true);
+                }
             })
             .on("mouseleave", (event, d) => {
                 link.classed("hover-connected", false)
                     .style("stroke", l => getLinkStyle(l.strength).color)
                     .style("stroke-width", l => getLinkStyle(l.strength).width)
                     .style("stroke-opacity", null);
+
+                if (d.subfield && window.highlightAnalyticsSubfield) {
+                    window.highlightAnalyticsSubfield(d.subfield, false);
+                }
             });
 
         const formatDate = d3.timeFormat("%Y-%m-%d");

@@ -389,3 +389,18 @@ function updateAnalyticsSelection() {
     }
 
 }
+
+function highlightAnalyticsSubfield(subfieldName, isActive) {
+    if (!subfieldName) return;
+    const svg = d3.select(".radial-chart-container svg");
+    if (svg.empty()) return;
+
+    svg.selectAll("path")
+        .filter(d => d.data.name === subfieldName)
+        .style("opacity", isActive ? 0.7 : 1)
+        .style("stroke", isActive ? "#fff" : null)
+        .style("stroke-width", isActive ? "2px" : null);
+}
+
+// Make it globally accessible
+window.highlightAnalyticsSubfield = highlightAnalyticsSubfield;
