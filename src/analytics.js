@@ -213,7 +213,9 @@ function updateAnalytics(mode = "both") {
 
 
     // --- Radial Treemap (Sunburst) ---
-    const radialContainer = panel.append("div").attr("class", "radial-chart-container");
+    const radialContainer = panel.append("div")
+        .attr("class", "radial-chart-container")
+        .style("position", "relative"); // For absolute overlay positioning
     
     radialContainer.append("div")
         .style("font-size", "14px")
@@ -279,6 +281,22 @@ function updateAnalytics(mode = "both") {
         .sum(d => d.value)
         .sort((a, b) => b.value - a.value);
 
+    // Calculate readCount for every node
+    root.eachAfter(node => {
+        if (node.children) {
+            node.readCount = node.children.reduce((sum, c) => sum + c.readCount, 0);
+        } else {
+            // Leaf
+            node.readCount = 0;
+            if (node.data.paperIds) {
+                node.readCount = node.data.paperIds.filter(id => {
+                    const meta = paperMeta.get(id);
+                    return meta && meta.isRead;
+                }).length;
+            }
+        }
+    });
+
     partition(root);
 
     // Scales for zooming
@@ -313,11 +331,69 @@ function updateAnalytics(mode = "both") {
         })
         .style("cursor", "pointer")
         .style("opacity", 1)
-        .on("mouseover", function() { d3.select(this).style("opacity", 0.7); })
-        .on("mouseout", function() { d3.select(this).style("opacity", 1); })
-        .on("click", clicked)
-        .append("title")
-        .text(d => `${d.ancestors().map(d => d.data.name).reverse().join(" -> ")}\n${format(d.value)} papers`);
+        .on("mouseover", function(event, d) { 
+            d3.select(this).style("opacity", 0.3); // Dim background
+            
+            // Remove existing SVG overlay/fill if any
+            radialSvg.selectAll(".arc-overlay").remove(); // Cleanup legacy if any
+            radialSvg.selectAll(".arc-fill").remove();
+
+            // --- 1. Peripheral Fill (Read Coverage) ---
+            const pct = d.value > 0 ? (d.readCount / d.value) : 0;
+            if (pct > 0) {
+                const span = d.x1 - d.x0;
+                const filledX1 = d.x0 + span * pct;
+                const filledData = { ...d, x1: filledX1 };
+                
+                radialSvg.append("path")
+                    .attr("class", "arc-fill")
+                    .attr("d", arc(filledData))
+                    .style("fill", "#4ADE80")
+                    .style("pointer-events", "none")
+                    .style("opacity", 0.8);
+            }
+
+            // --- 2. HTML Overlay (on top of everything) ---
+            let overlay = radialContainer.select(".radial-overlay");
+            if (overlay.empty()) {
+                overlay = radialContainer.append("div")
+                    .attr("class", "radial-overlay")
+                    .style("position", "absolute")
+                    .style("pointer-events", "none")
+                    .style("background", "rgba(0,0,0,0.2)")
+                    .style("border", "1px solid #444")
+                    .style("padding", "6px 10px")
+                    .style("border-radius", "4px")
+                    .style("color", "#fff")
+                    .style("font-size", "11px")
+                    .style("text-align", "center")
+                    .style("z-index", "2000")
+                    .style("box-shadow", "0 4px 12px rgba(0,0,0,0.5)")
+                    .style("min-width", "120px");
+            }
+
+            const centroid = arc.centroid(d);
+            // Center is at rWidth/2, rHeight/2. Overlay should be centered on centroid.
+            const centerX = rWidth / 2 + centroid[0];
+            const centerY = rHeight / 2 + centroid[1];
+
+            overlay.style("display", "block")
+                .html(`
+                    <div style="font-weight: bold; margin-bottom: 2px;">${d.data.name}</div>
+                    <div style="color: #ccc; font-size: 10px;">
+                        ${format(d.value)} papers<br/>
+                        <span style="color: #4ADE80;">${Math.round(pct * 100)}% read</span>
+                    </div>
+                `)
+                .style("left", (centerX - 60) + "px") // 60 is half of min-width
+                .style("top", (centerY - 25) + "px");
+        })
+        .on("mouseout", function() { 
+            d3.select(this).style("opacity", 1);
+            radialSvg.selectAll(".arc-fill").remove();
+            radialContainer.select(".radial-overlay").style("display", "none");
+        })
+        .on("click", clicked);
 
     let focus = root;
 
@@ -395,11 +471,41 @@ function highlightAnalyticsSubfield(subfieldName, isActive) {
     const svg = d3.select(".radial-chart-container svg");
     if (svg.empty()) return;
 
-    svg.selectAll("path")
-        .filter(d => d.data.name === subfieldName)
-        .style("opacity", isActive ? 0.7 : 1)
-        .style("stroke", isActive ? "#fff" : null)
-        .style("stroke-width", isActive ? "2px" : null);
+    if (!isActive) {
+        // Reset state
+        svg.selectAll("path").style("opacity", 1);
+        svg.selectAll(".arc-fill").remove();
+        d3.select(".radial-chart-container").select(".radial-overlay").style("display", "none");
+        return;
+    }
+
+    // Find the matching data node
+    const matchingPath = svg.selectAll("path")
+        .filter(d => d.data.name === subfieldName);
+
+    if (matchingPath.empty()) return;
+
+    // Trigger the hover effect manually
+    matchingPath.each(function(d) {
+        // We need the 'arc' generator which is defined inside updateAnalytics scope.
+        // Since we can't access it here, we have to reconstruct it or expose it.
+        // However, we can re-select the context or use the data attached to the path.
+        // A cleaner way is to dispatch the 'mouseover' event, but d3 events are complex to simulate perfectly
+        // with custom data.
+        
+        // BETTER APPROACH: Move the rendering logic to a shared helper or duplicate the critical parts.
+        // Given the constraints, I will duplicate the critical logic here, but I need 'arc' and 'radius'.
+        // Since 'arc' relies on 'x' and 'y' scales which are local and dynamic (zooming),
+        // we can't easily reconstruct them without scope access.
+
+        // WORKAROUND: Dispatch a native MouseEvent to the node.
+        const event = new MouseEvent('mouseover', {
+            view: window,
+            bubbles: true,
+            cancelable: true
+        });
+        this.dispatchEvent(event);
+    });
 }
 
 // Make it globally accessible
