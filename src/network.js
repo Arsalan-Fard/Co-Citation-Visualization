@@ -11,8 +11,8 @@ class NetworkVisualizer {
         this.height = 0;
         this.resizeObserver = null;
         this.resizeTimeout = null;
-        this.edgeThreshold = 0; // 0 to 100
-        this.highlightRead = true; // Default matches HTML checked state
+        this.edgeThreshold = 0;
+        this.highlightRead = true;
         this.highlightSurvey = false;
         this.highlightCitation = false;
         this.axisScaleX = 1;
@@ -71,7 +71,6 @@ class NetworkVisualizer {
         const showRead = this.highlightRead;
         const showSurvey = this.highlightSurvey;
         
-        // Define scales: 0 (White) -> 1 (Color)
         const scaleBlue = d3.scaleLinear().domain([0, 1]).range(["#ffffff", "#3B82F6"]);
         const scaleGreen = d3.scaleLinear().domain([0, 1]).range(["#ffffff", "#4ADE80"]);
         const scalePurple = d3.scaleLinear().domain([0, 1]).range(["#ffffff", "#D946EF"]);
@@ -92,7 +91,6 @@ class NetworkVisualizer {
                 const sel = d3.select(this);
                 sel.selectAll("stop").remove();
                 
-                // Select Scale
                 let colorScale = scaleBlue;
                 if (showRead && d.isRead) colorScale = scaleGreen;
                 else if (showSurvey && d.isSurvey) colorScale = scalePurple;
@@ -139,12 +137,10 @@ class NetworkVisualizer {
         nodes.classed("selected", false).classed("dimmed", false);
 
         if (selectedSet.size === 0) {
-            // Even without selection, dim orphans
             nodes.classed("dimmed", d => d.degree === 0);
             return;
         }
 
-        // Identify neighbors of selected nodes
         const neighborSet = new Set();
         if (this.links) {
             this.links.forEach(l => {
@@ -153,22 +149,16 @@ class NetworkVisualizer {
             });
         }
 
-        // Highlight connected links, dim others
         links.classed("highlighted", l => selectedSet.has(l.sourceId) || selectedSet.has(l.targetId))
              .classed("dimmed", l => !selectedSet.has(l.sourceId) && !selectedSet.has(l.targetId));
 
-        // Select specific nodes, dim others (unless neighbor)
-        // Also dim orphans (degree 0) even if selected? No, if selected it should be visible.
-        // But an orphan can't have neighbors.
         nodes.classed("selected", d => selectedSet.has(d.id))
              .classed("dimmed", d => {
-                 if (selectedSet.has(d.id)) return false; // Selected is never dimmed
-                 if (neighborSet.has(d.id)) return false; // Neighbor is never dimmed
-                 // Otherwise dimmed (either disconnected from selection, OR orphan)
+                 if (selectedSet.has(d.id)) return false;
+                 if (neighborSet.has(d.id)) return false;
                  return true; 
              });
              
-        // Bring selected to front
         nodes.filter(d => selectedSet.has(d.id)).raise();
     }
 
@@ -190,10 +180,8 @@ class NetworkVisualizer {
             .attr("fill", "#2a2a2a");
 
         this.panZoomGroup = this.svg.append("g").attr("class", "panzoom-layer");
-        // Removed rotateGroup, append graphGroup directly to panZoomGroup
         this.graphGroup = this.panZoomGroup.append("g").attr("class", "graph-layer");
         
-        // Persistent Layers
         this.gridLayer = this.graphGroup.append("g").attr("class", "grid-layer");
         this.linksLayer = this.graphGroup.append("g").attr("class", "links-layer");
         this.nodesLayer = this.graphGroup.append("g").attr("class", "nodes-layer");
@@ -207,7 +195,6 @@ class NetworkVisualizer {
 
         this.svg.call(this.zoom);
 
-        // Axis Scaling Logic
         let scaling = false;
         let startX = 0;
         let startY = 0;
@@ -224,7 +211,7 @@ class NetworkVisualizer {
                 startScaleY = self.axisScaleY;
                 self.svg.style("cursor", "crosshair");
                 event.preventDefault();
-                event.stopImmediatePropagation(); // Prevent Zoom
+                event.stopImmediatePropagation();
             }
         });
 
@@ -239,8 +226,6 @@ class NetworkVisualizer {
             self.axisScaleX = Math.max(0.1, startScaleX * (1 + dx * k));
             self.axisScaleY = Math.max(0.1, startScaleY * (1 - dy * k));
             
-            // Basic throttling via RAF is handled by the browser event loop mostly, 
-            // but updateGraph might be heavy. 
             self.updateGraph(); 
         });
 
@@ -293,7 +278,6 @@ class NetworkVisualizer {
             allNodeIds.add(d.paper2);
         });
 
-        // Preserve previous positions to prevent re-layout explosion
         const oldPositions = new Map();
         if (this.nodes) {
             this.nodes.forEach(n => {
@@ -326,7 +310,7 @@ class NetworkVisualizer {
                 isSurvey: meta.isSurvey,
                 citationDates: meta.citationDates
             };
-        }); // Removed filtering
+        });
 
         if (nodes.length === 0) {
             this.nodes = [];
@@ -348,21 +332,14 @@ class NetworkVisualizer {
             strength: +d[this.strengthKey]
         })).filter(l => nodesById.has(l.sourceId) && nodesById.has(l.targetId));
 
-        // Threshold Logic
         const fullStrengthExtent = potentialLinks.length ? d3.extent(potentialLinks, d => d.strength) : [0, 1];
         const minS = fullStrengthExtent[0];
         const maxS = fullStrengthExtent[1];
         
-        // If slider is 100, we want only max strength (or empty if logic dictates >= max)
-        // If slider is 0, we want >= min (all)
         const cutoff = minS + (this.edgeThreshold / 100) * (maxS - minS);
         
-        // Keep links >= cutoff
-        // Special case: if cutoff == maxS and we want to show the max edges, >= is fine.
-        // If we want to hide ALL at 100 unless they equal max, that's also fine.
         const links = potentialLinks.filter(l => l.strength >= cutoff);
 
-        // --- DEBUG: Strength Distribution ---
         if (links.length > 0) {
             const strengths = links.map(d => d.strength);
             const min = Math.min(...strengths);
@@ -373,7 +350,6 @@ class NetworkVisualizer {
             console.log(`Range: [${min.toFixed(4)}, ${max.toFixed(4)}]`);
             console.log(`Average: ${avg.toFixed(4)}`);
 
-            // Simple 10-bin histogram
             const bins = 10;
             const range = max - min;
             const binSize = range / bins || 1;
@@ -392,7 +368,6 @@ class NetworkVisualizer {
             });
             console.groupEnd();
         }
-        // ------------------------------------
 
         if (this.highlightCitation) {
             this.updateGradients(nodes);
@@ -420,16 +395,13 @@ class NetworkVisualizer {
             const metric = nodeMetrics.get(node.id) || { degree: 0, weightedDegree: 0 };
             node.degree = metric.degree;
             node.weightedDegree = metric.weightedDegree;
-            node.centrality = node.degree; // Alias for axis
+            node.centrality = node.degree;
         });
 
-        // --- Betweenness Centrality Calculation (Brandes) ---
-        // Only run if nodes < 2000 to prevent browser freeze (simple heuristic)
         if (nodes.length < 2000) {
             const adj = new Map();
             nodes.forEach(n => adj.set(n.id, []));
             links.forEach(l => {
-                // Ensure IDs exist in map (links filtered by node existence already, but safe check)
                 if(adj.has(l.sourceId)) adj.get(l.sourceId).push(l.targetId);
                 if(adj.has(l.targetId)) adj.get(l.targetId).push(l.sourceId);
             });
@@ -444,7 +416,6 @@ class NetworkVisualizer {
                 const sigma = new Map();
                 const d = new Map();
                 
-                // Init
                 nodes.forEach(v => {
                     P.set(v.id, []);
                     sigma.set(v.id, 0);
@@ -489,12 +460,8 @@ class NetworkVisualizer {
                 n.betweenness = (CB.get(n.id) || 0) / 2;
             });
         } else {
-             // Fallback for large graphs
              nodes.forEach(n => n.betweenness = 0);
         }
-
-        // Use full extent for width scale stability (legacy usage removed)
-        // const widthScale = d3.scaleLinear().domain(fullStrengthExtent).range([0.1, 0.6]); 
 
         const centerX = this.width / 2;
         const centerY = this.height / 2;
@@ -505,17 +472,15 @@ class NetworkVisualizer {
         const minLog = Math.log(minStrength);
         const maxLog = Math.log(maxStrength);
 
-        // Color Scale: Light Grey (weak) -> Vibrant Blue/Purple (strong)
-        // d3.interpolateCool goes from Cyan to Magenta - usually visible on both dark/light
         const edgeColorScale = d3.scaleSequential(d3.interpolateBlues)
-            .domain([0, 1]); // Normalized log strength
+            .domain([0, 1]);
 
         const getLinkStyle = (strength) => {
              if (maxLog === minLog) return { width: 1, color: "#999" };
              const logVal = Math.log(strength);
              const norm = (logVal - minLog) / (maxLog - minLog);
              return {
-                 width: 0.1 + (norm * 1.0), // Range 0.5px to 1.5px
+                 width: 0.1 + (norm * 1.0),
                  color: edgeColorScale(norm)
              };
         };
@@ -582,13 +547,6 @@ class NetworkVisualizer {
             const colorValues = nodes
                 .map(node => getNodeColorValue(node, nodeColorMetric))
                 .filter(v => v != null);
-
-            // if (colorValues.length > 0) {
-            //     const unique = Array.from(new Set(colorValues));
-            //     colorScale = d3.scaleOrdinal()
-            //         .domain(unique)
-            //         // .range(buildColorRange(unique.length));
-            // }
         }
 
         const radiusForNode = (node) => {
@@ -620,7 +578,6 @@ class NetworkVisualizer {
         const xRange = xScale.range();
         const xMin = Math.min(...xRange);
         const xMax = Math.max(...xRange);
-        // centerX, centerY already defined above
 
         const xMetricDef = AXIS_METRICS[xMetricInfo.key];
         const yMetricDef = AXIS_METRICS[yMetricInfo.key];
@@ -649,9 +606,8 @@ class NetworkVisualizer {
             .attr("y", yMax + 25)
             .text(d => xFormatter(d));
 
-        // Apply rotation to all x-axis labels to prevent overlap
         xLabelGroup.attr("transform", d => `rotate(-45, ${xScale(d)}, ${yMax + 35})`)
-                   .style("text-anchor", "end"); // Align text to end for better readability when rotated
+                   .style("text-anchor", "end");
 
         const yTicks = typeof yScale.ticks === "function" ? yScale.ticks(10) : yScale.domain();
         gridLayer.append("g")
@@ -684,7 +640,7 @@ class NetworkVisualizer {
             .attr("class", "link")
             .attr("fill", "none")
             .style("stroke-width", d => getLinkStyle(d.strength).width)
-            .style("stroke", d => getLinkStyle(d.strength).color) // Apply dynamic color
+            .style("stroke", d => getLinkStyle(d.strength).color)
             .attr("d", d => {
                 const sx = nodesById.get(d.sourceId).x;
                 const sy = nodesById.get(d.sourceId).y;
@@ -713,7 +669,6 @@ class NetworkVisualizer {
                 showContextMenu(event, d.id);
             })
             .on("mouseenter", (event, d) => {
-                // Highlight connected links
                 link.classed("hover-connected", l => l.source.id === d.id || l.target.id === d.id)
                     .style("stroke", l => {
                         if (l.source.id === d.id || l.target.id === d.id) return "#d0d0d0ff";
@@ -725,7 +680,7 @@ class NetworkVisualizer {
                     })
                     .style("stroke-opacity", l => {
                         if (l.source.id === d.id || l.target.id === d.id) return 1;
-                        return null; // Revert to CSS default (or previous inline)
+                        return null;
                     });
 
                 if (d.subfield && window.highlightAnalyticsSubfield) {
@@ -759,7 +714,6 @@ class NetworkVisualizer {
         const axisWeight = Math.max(0, Math.min(1, positionStability));
         const forceWeight = 1 - axisWeight;
 
-        // Store selections for ticked
         this.currentLinkSelection = link;
         this.currentNodeSelection = node;
 
@@ -769,7 +723,6 @@ class NetworkVisualizer {
                     if (maxLog === minLog) return 200; 
                     const logVal = Math.log(d.strength);
                     const norm = (logVal - minLog) / (maxLog - minLog);
-                    // Map 0..1 to 400..50 (Stronger = Closer)
                     return 400 - (norm * (400 - 50));
                 }))
                 .force("charge", d3.forceManyBody())
@@ -779,7 +732,6 @@ class NetworkVisualizer {
                 .force("center", d3.forceCenter(centerX, centerY));
         }
 
-        // Always update forces and restart
         this.simulation.nodes(nodes);
         this.simulation.force("link").links(links).distance(d => {
             if (maxLog === minLog) return 200;
@@ -797,7 +749,6 @@ class NetworkVisualizer {
         sim.force("y").y(d => d.targetY).strength(0.6 * axisWeight);
         sim.force("center").strength(0.5 * forceWeight);
         
-        // Update tick handler to use current selections
         sim.on("tick", () => {
             if (axisWeight >= 0.98) {
                  this.currentNodeSelection.attr("cx", d => d.x += (d.targetX - d.x) * 0.3)
@@ -806,7 +757,7 @@ class NetworkVisualizer {
                  this.currentNodeSelection.attr("cx", d => d.x).attr("cy", d => d.y);
             }
             
-            const linkLerp = 0.18; // Ease edges so they don't outrun node movement
+            const linkLerp = 0.18;
             this.currentLinkSelection.attr("d", d => {
                 if (!Number.isFinite(d.rsx)) {
                     d.rsx = d.source.x; d.rsy = d.source.y;
@@ -825,11 +776,8 @@ class NetworkVisualizer {
 
         sim.alpha(0.3).restart();
 
-        // this.svg.call(this.zoom.transform, d3.zoomIdentity); // Removed unconditional zoom reset
-        
         if (this.svg.attr("id") === "graph-svg") {
              document.getElementById('node-count').textContent = nodes.length.toLocaleString();
-             // Define strengthExtent alias for legacy code below if needed, or update usage
              const strengthExtent = fullStrengthExtent;
              if (links.length > 0 && strengthExtent && strengthExtent[0] != null && strengthExtent[1] != null) {
                 document.getElementById('strength-range').textContent = `${strengthExtent[0]} - ${strengthExtent[1]}`;
@@ -838,7 +786,6 @@ class NetworkVisualizer {
             }
         }
         
-        // Apply current selection to newly rendered graph
         this.updateSelection(selectedNodeIds);
     }
 }
