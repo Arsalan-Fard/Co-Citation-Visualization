@@ -711,7 +711,10 @@ class NetworkVisualizer {
                 return [d.title || d.id, ...parts].join(" • ");
             });
 
-        const axisWeight = Math.max(0, Math.min(1, positionStability));
+        const clampedStability = Math.max(0, Math.min(1, positionStability));
+        // Use quadratic ease-out: 1 - (1-x)^2. This makes the effect "stronger" earlier in the slider range
+        // and provides finer control (less change) near 1.0.
+        const axisWeight = 1 - Math.pow(1 - clampedStability, 2);
         const forceWeight = 1 - axisWeight;
 
         this.currentLinkSelection = link;
@@ -750,12 +753,7 @@ class NetworkVisualizer {
         sim.force("center").strength(0.5 * forceWeight);
         
         sim.on("tick", () => {
-            if (axisWeight >= 0.98) {
-                 this.currentNodeSelection.attr("cx", d => d.x += (d.targetX - d.x) * 0.3)
-                              .attr("cy", d => d.y += (d.targetY - d.y) * 0.3);
-            } else {
-                 this.currentNodeSelection.attr("cx", d => d.x).attr("cy", d => d.y);
-            }
+            this.currentNodeSelection.attr("cx", d => d.x).attr("cy", d => d.y);
             
             const linkLerp = 0.18;
             this.currentLinkSelection.attr("d", d => {
