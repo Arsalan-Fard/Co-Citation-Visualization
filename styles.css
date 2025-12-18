@@ -244,7 +244,7 @@ body {
 
 .node:hover,
 .node.selected {
-    stroke: #bfc5e2;
+    stroke: #ffffff;
     stroke-width: 2px;
     filter: drop-shadow(0 0 8px rgba(74, 144, 226, 0.6));
 }

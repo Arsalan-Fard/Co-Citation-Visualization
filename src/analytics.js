@@ -249,7 +249,7 @@ function updateAnalytics(mode = "both") {
         fields.forEach((subfields, fieldName) => {
             const fieldNode = { name: fieldName, children: [] };
             subfields.forEach((paperIds, subfieldName) => {
-                const subfieldNode = { name: subfieldName, value: paperIds.length };
+                const subfieldNode = { name: subfieldName, value: paperIds.length, paperIds: paperIds };
                 fieldNode.children.push(subfieldNode);
             });
             domainNode.children.push(fieldNode);
@@ -313,6 +313,8 @@ function updateAnalytics(mode = "both") {
         })
         .style("cursor", "pointer")
         .style("opacity", 1)
+        .on("mouseover", function() { d3.select(this).style("opacity", 0.7); })
+        .on("mouseout", function() { d3.select(this).style("opacity", 1); })
         .on("click", clicked)
         .append("title")
         .text(d => `${d.ancestors().map(d => d.data.name).reverse().join(" -> ")}\n${format(d.value)} papers`);
@@ -355,6 +357,17 @@ function updateAnalytics(mode = "both") {
         .attrTween("d", d => () => arc(d));
         
         centerText.text(p.data.name.length > 12 ? p.data.name.substring(0, 10) + ".." : p.data.name);
+
+        // Update global selection based on the clicked node's descendants
+        selectedNodeIds.clear();
+        if (p !== root) {
+            p.leaves().forEach(d => {
+                if (d.data.paperIds) {
+                    d.data.paperIds.forEach(id => selectedNodeIds.add(id));
+                }
+            });
+        }
+        updateAllSelections();
     }
 
     updateAnalyticsSelection();

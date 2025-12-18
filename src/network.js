@@ -306,6 +306,7 @@ class NetworkVisualizer {
             const oldPos = oldPositions.get(id);
             return {
                 id,
+                title: meta.title,
                 x: oldPos ? oldPos.x : undefined,
                 y: oldPos ? oldPos.y : undefined,
                 vx: oldPos ? oldPos.vx : undefined,
@@ -744,7 +745,7 @@ class NetworkVisualizer {
                 if (d.weightedDegree != null) parts.push(`weighted_degree: ${d.weightedDegree}`);
                 if (d.venue) parts.push(`venue: ${d.venue}`);
                 if (d.institution) parts.push(`institution: ${d.institution}`);
-                return [d.id, ...parts].join(" • ");
+                return [d.title || d.id, ...parts].join(" • ");
             });
 
         const axisWeight = Math.max(0, Math.min(1, positionStability));

@@ -19,7 +19,6 @@ function handleGlobalClear() {
 function updateAllSelections() {
     graphs.forEach(g => g.updateSelection(selectedNodeIds));
     updateAnalyticsSelection();
-    updateAnalytics(currentAnalyticsMode);
 }
 
 function updateAllGraphs() {
