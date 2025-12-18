@@ -130,13 +130,10 @@ def main():
     if data:
         df = pd.DataFrame(data)
         
-        # Preserve 'read' column if exists
         try:
             existing_df = pd.read_csv(OUTPUT_FILE)
             if 'read' in existing_df.columns:
                 print("Preserving 'read' status from existing file...")
-                # Create map from DOI to read status
-                # Normalize DOI just in case, though usually exact match in this script context
                 read_map = dict(zip(existing_df['doi'], existing_df['read']))
                 df['read'] = df['doi'].map(read_map).fillna(0).astype(int, errors='ignore') # Default to 0/empty if new
             else:
@@ -152,7 +149,6 @@ def main():
             'is_open_access','oa_status','read'
         ]
         
-        # Ensure all cols exist (e.g. if API failed for all)
         for c in cols:
             if c not in df.columns:
                 df[c] = ""

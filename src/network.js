@@ -583,12 +583,12 @@ class NetworkVisualizer {
                 .map(node => getNodeColorValue(node, nodeColorMetric))
                 .filter(v => v != null);
 
-            if (colorValues.length > 0) {
-                const unique = Array.from(new Set(colorValues));
-                colorScale = d3.scaleOrdinal()
-                    .domain(unique)
-                    .range(buildColorRange(unique.length));
-            }
+            // if (colorValues.length > 0) {
+            //     const unique = Array.from(new Set(colorValues));
+            //     colorScale = d3.scaleOrdinal()
+            //         .domain(unique)
+            //         // .range(buildColorRange(unique.length));
+            // }
         }
 
         const radiusForNode = (node) => {

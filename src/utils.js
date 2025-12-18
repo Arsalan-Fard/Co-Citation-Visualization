@@ -1,13 +1,4 @@
-function buildColorRange(count) {
-    if (count <= COLOR_PALETTE.length) {
-        return COLOR_PALETTE.slice(0, count);
-    }
-    const range = [...COLOR_PALETTE];
-    while (range.length < count) {
-        range.push(...COLOR_PALETTE);
-    }
-    return range.slice(0, count);
-}
+
 
 function getNodeSizeValue(node, metricKey) {
     if (metricKey === "degree") return node.degree ?? null;

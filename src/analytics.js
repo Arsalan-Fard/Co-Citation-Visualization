@@ -44,14 +44,12 @@ function updateAnalytics(mode = "both") {
     panel.selectAll(".heatmap-legend").remove();
     panel.selectAll(".radial-chart-container").remove();
 
-    // --- Heatmap Visualization ---
     if (readPapers.length > 0 && top10.length > 0) {
         const heatmapContainer = panel.append("div")
             .attr("class", "heatmap-container")
             .style("display", "flex")
             .style("align-items", "center");
 
-        // Static Side Label (Fixed)
         heatmapContainer.append("div")
             .text("Read Papers")
             .style("writing-mode", "vertical-rl")
@@ -63,13 +61,12 @@ function updateAnalytics(mode = "both") {
             .style("text-align", "center")
             .style("margin-right", "4px");
 
-        // Scrollable Area for SVG
         const scrollDiv = heatmapContainer.append("div")
             .attr("class", "heatmap-scroll-area")
             .style("flex-grow", "1")
             .style("overflow-y", "auto")
-            .style("max-height", "250px") // Limit height to reduce visual footprint
-            .style("height", "100%"); // Ensure it fills container height if defined in CSS
+            .style("max-height", "250px")  
+            .style("height", "100%");  
 
         const matrix = [];
         let maxVal = 0;
@@ -94,16 +91,14 @@ function updateAnalytics(mode = "both") {
             matrix.push(row);
         });
 
-        // Sort rows by total strength descending
         matrix.sort((a, b) => b.totalStrength - a.totalStrength);
 
         const containerNode = heatmapContainer.node();
-        // Estimate width: container width minus label width (approx 20px)
         const totalWidth = containerNode ? (containerNode.getBoundingClientRect().width - 25) : 280;
         const margin = { top: 25, right: 0, bottom: 0, left: 0 }; 
         
         const cellWidth = Math.floor((totalWidth - margin.left - margin.right) / 10);
-        const cellHeight = cellWidth; // Revert to square cells
+        const cellHeight = cellWidth;
         const height = matrix.length * cellHeight + margin.top + margin.bottom;
 
         const svg = scrollDiv.append("svg")
@@ -113,7 +108,6 @@ function updateAnalytics(mode = "both") {
         const g = svg.append("g")
             .attr("transform", `translate(${margin.left},${margin.top})`);
 
-        // Top Label (Top 10 Recommendations)
         svg.append("text")
             .attr("x", totalWidth / 2)
             .attr("y", margin.top / 2 + 5)
@@ -122,7 +116,6 @@ function updateAnalytics(mode = "both") {
             .style("fill", "#888")
             .text("Top 10 Recommendations");
 
-        // Removed number labels (1-10) as requested
 
         const colorScale = d3.scaleSequential(d3.interpolateBlues)
             .domain([0, Math.log10((maxVal || 1) + 1)]); 
@@ -212,10 +205,9 @@ function updateAnalytics(mode = "both") {
 
 
 
-    // --- Radial Treemap (Sunburst) ---
     const radialContainer = panel.append("div")
         .attr("class", "radial-chart-container")
-        .style("position", "relative"); // For absolute overlay positioning
+        .style("position", "relative"); 
     
     radialContainer.append("div")
         .style("font-size", "14px")
@@ -281,12 +273,10 @@ function updateAnalytics(mode = "both") {
         .sum(d => d.value)
         .sort((a, b) => b.value - a.value);
 
-    // Calculate readCount for every node
     root.eachAfter(node => {
         if (node.children) {
             node.readCount = node.children.reduce((sum, c) => sum + c.readCount, 0);
         } else {
-            // Leaf
             node.readCount = 0;
             if (node.data.paperIds) {
                 node.readCount = node.data.paperIds.filter(id => {
@@ -299,9 +289,7 @@ function updateAnalytics(mode = "both") {
 
     partition(root);
 
-    // Scales for zooming
     const x = d3.scaleLinear().range([0, 2 * Math.PI]);
-    // Set y domain start to root.y1 so the first ring starts at holeRadius
     const y = d3.scaleSqrt().domain([root.y1, 1]).range([holeRadius, radius]);
 
     const arc = d3.arc()
@@ -312,9 +300,8 @@ function updateAnalytics(mode = "both") {
         .innerRadius(d => Math.max(0, y(d.y0)))
         .outerRadius(d => Math.max(0, y(d.y1) - 1));
 
-    // Render paths
     radialSvg.selectAll("path")
-        .data(root.descendants().filter(d => d.depth)) // Filter out root
+        .data(root.descendants().filter(d => d.depth))  
         .join("path")
         .attr("d", arc)
         .style("fill", d => {
@@ -322,23 +309,17 @@ function updateAnalytics(mode = "both") {
              while (domain.depth > 1) domain = domain.parent;
              const baseColor = color(domain.data.name);
              
-             // Mix with white based on depth to make it "brighter" (more pastel/whitish)
-             // Depth 1 (Domain): 0% white (pure base color)
-             // Depth 2 (Field): 30% white
-             // Depth 3 (Subfield): 60% white
-             const whiteFactor = (d.depth - 1) * 0.3;
+              const whiteFactor = (d.depth - 1) * 0.3;
              return d3.interpolateRgb(baseColor, "#ffffff")(Math.min(whiteFactor, 0.8));
         })
         .style("cursor", "pointer")
         .style("opacity", 1)
         .on("mouseover", function(event, d) { 
-            d3.select(this).style("opacity", 0.3); // Dim background
+            d3.select(this).style("opacity", 0.3); 
             
-            // Remove existing SVG overlay/fill if any
-            radialSvg.selectAll(".arc-overlay").remove(); // Cleanup legacy if any
+            radialSvg.selectAll(".arc-overlay").remove();  
             radialSvg.selectAll(".arc-fill").remove();
 
-            // --- 1. Peripheral Fill (Read Coverage) ---
             const pct = d.value > 0 ? (d.readCount / d.value) : 0;
             if (pct > 0) {
                 const span = d.x1 - d.x0;
@@ -353,7 +334,6 @@ function updateAnalytics(mode = "both") {
                     .style("opacity", 0.8);
             }
 
-            // --- 2. HTML Overlay (on top of everything) ---
             let overlay = radialContainer.select(".radial-overlay");
             if (overlay.empty()) {
                 overlay = radialContainer.append("div")
@@ -373,7 +353,6 @@ function updateAnalytics(mode = "both") {
             }
 
             const centroid = arc.centroid(d);
-            // Center is at rWidth/2, rHeight/2. Overlay should be centered on centroid.
             const centerX = rWidth / 2 + centroid[0];
             const centerY = rHeight / 2 + centroid[1];
 
@@ -397,7 +376,6 @@ function updateAnalytics(mode = "both") {
 
     let focus = root;
 
-    // Center Clickable Area (to zoom out)
     const centerGroup = radialSvg.append("g")
         .style("cursor", "pointer")
         .on("click", (event) => {
@@ -434,7 +412,6 @@ function updateAnalytics(mode = "both") {
         
         centerText.text(p.data.name.length > 12 ? p.data.name.substring(0, 10) + ".." : p.data.name);
 
-        // Update global selection based on the clicked node's descendants
         selectedNodeIds.clear();
         if (p !== root) {
             p.leaves().forEach(d => {
@@ -453,13 +430,11 @@ function updateAnalyticsSelection() {
     const container = d3.select(".heatmap-container");
     container.classed("has-selection", selectedNodeIds.size > 0);
     
-    // Clear all highlights first
     container.selectAll(".heatmap-cell").classed("highlighted", false);
 
     if (selectedNodeIds.size > 0) {
         container.selectAll(".heatmap-cell")
             .classed("highlighted", d => {
-                // Check if this cell's unreadId (column) OR readId (row) is in the selection
                 return selectedNodeIds.has(d.unreadId) || selectedNodeIds.has(d.readId);
             });
     }
@@ -472,33 +447,19 @@ function highlightAnalyticsSubfield(subfieldName, isActive) {
     if (svg.empty()) return;
 
     if (!isActive) {
-        // Reset state
         svg.selectAll("path").style("opacity", 1);
         svg.selectAll(".arc-fill").remove();
         d3.select(".radial-chart-container").select(".radial-overlay").style("display", "none");
         return;
     }
 
-    // Find the matching data node
     const matchingPath = svg.selectAll("path")
         .filter(d => d.data.name === subfieldName);
 
     if (matchingPath.empty()) return;
 
-    // Trigger the hover effect manually
     matchingPath.each(function(d) {
-        // We need the 'arc' generator which is defined inside updateAnalytics scope.
-        // Since we can't access it here, we have to reconstruct it or expose it.
-        // However, we can re-select the context or use the data attached to the path.
-        // A cleaner way is to dispatch the 'mouseover' event, but d3 events are complex to simulate perfectly
-        // with custom data.
-        
-        // BETTER APPROACH: Move the rendering logic to a shared helper or duplicate the critical parts.
-        // Given the constraints, I will duplicate the critical logic here, but I need 'arc' and 'radius'.
-        // Since 'arc' relies on 'x' and 'y' scales which are local and dynamic (zooming),
-        // we can't easily reconstruct them without scope access.
 
-        // WORKAROUND: Dispatch a native MouseEvent to the node.
         const event = new MouseEvent('mouseover', {
             view: window,
             bubbles: true,
@@ -508,5 +469,4 @@ function highlightAnalyticsSubfield(subfieldName, isActive) {
     });
 }
 
-// Make it globally accessible
 window.highlightAnalyticsSubfield = highlightAnalyticsSubfield;
