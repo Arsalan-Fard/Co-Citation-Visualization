@@ -68,7 +68,30 @@ This is a front-end (browser) app built with **vanilla HTML/CSS/JavaScript** and
 
 ### Quick start
 1. Clone this repo
-2. Start a local server in the project folder (recommended)
+2. Install Python dependencies:
+   ```bash
+   pip install pandas requests
+   ```
+3. Set your OpenAlex email in a local file (not committed):
+   - Copy `data/local_config.example.py` to `data/local_config.py`
+   - Set `OPENALEX_EMAIL` in `data/local_config.py`
+4. Prepare a DOI text file (one DOI per line), for example `data/dois_hci.txt`
+5. Generate all CSVs needed by the visualization with one command:
+   ```bash
+   python data/run_csv_pipeline.py --doi-file data/dois_hci.txt
+   ```
+6. Start a local server in the project folder, for example:
+   ```bash
+   python -m http.server 8000
+   ```
+7. Open `http://localhost:8000`
+
+The pipeline command produces/overwrites:
+- `data/main_papers.csv`
+- `data/references.csv`
+- `data/citation.csv`
+- `data/cocitation_network.csv`
+- `data/bibliographic_coupling_network.csv`
 
 ## Controls (what you can do in the UI)
 
