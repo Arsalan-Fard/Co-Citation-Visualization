@@ -3,8 +3,9 @@ import requests
 import time
 import sys
 import os
+from openalex_config import get_openalex_email
 
-EMAIL = "arsalan.masoudifard@ip-paris.fr"
+EMAIL = get_openalex_email()
 INPUT_FILE = "Phase1/main_papers.csv"
 OUTPUT_FILE = "Phase1/references.csv"
 

@@ -2,8 +2,9 @@ import requests
 import pandas as pd
 import re
 import time
+from openalex_config import get_openalex_email
 
-EMAIL = "arsalan.masoudifard@ip-paris.fr"
+EMAIL = get_openalex_email()
 INPUT_FILE = "data/dois.txt"
 OUTPUT_FILE = "main_papers.csv"
 
